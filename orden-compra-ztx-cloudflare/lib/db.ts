@@ -39,6 +39,9 @@ export type DeliveryRow = {
   fiscal: string | null;
   status: 'Entregado' | 'Pendiente' | 'En tránsito';
   notes: string | null;
+  received_by_name: string | null;
+  received_by_dni: string | null;
+  received_at: string | null;
   created_at: string;
 };
 
@@ -53,10 +56,18 @@ export function getDb() {
 
 export async function ensureSchema(db: D1Database) {
   await db.batch(schemaStatements.map((statement) => db.prepare(statement)));
-  try {
-    await db.prepare('ALTER TABLE purchase_orders ADD COLUMN signature_dni TEXT').run();
-  } catch (error) {
-    if (!String(error).toLowerCase().includes('duplicate column')) throw error;
+  const compatibilityColumns = [
+    'ALTER TABLE purchase_orders ADD COLUMN signature_dni TEXT',
+    'ALTER TABLE deliveries ADD COLUMN received_by_name TEXT',
+    'ALTER TABLE deliveries ADD COLUMN received_by_dni TEXT',
+    'ALTER TABLE deliveries ADD COLUMN received_at TEXT',
+  ];
+  for (const statement of compatibilityColumns) {
+    try {
+      await db.prepare(statement).run();
+    } catch (error) {
+      if (!String(error).toLowerCase().includes('duplicate column')) throw error;
+    }
   }
 }
 
@@ -112,6 +123,9 @@ export function serializeOrder(order: Awaited<ReturnType<typeof getOrder>>) {
       fiscal: delivery.fiscal ?? '',
       status: delivery.status,
       notes: delivery.notes ?? '',
+      receivedByName: delivery.received_by_name ?? '',
+      receivedByDni: delivery.received_by_dni ?? '',
+      receivedAt: delivery.received_at,
     })),
   };
 }

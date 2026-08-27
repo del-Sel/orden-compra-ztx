@@ -34,6 +34,9 @@ export const schemaStatements = [
     fiscal TEXT,
     status TEXT NOT NULL,
     notes TEXT,
+    received_by_name TEXT,
+    received_by_dni TEXT,
+    received_at TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (order_id) REFERENCES purchase_orders(id)
   )`,

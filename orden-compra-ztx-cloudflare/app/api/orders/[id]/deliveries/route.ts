@@ -2,11 +2,10 @@ import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
 import { calculateFinalStatus } from '@/lib/order-status';
 
 type RouteContext = { params: Promise<{ id: string }> };
-type DeliveryStatus = 'Entregado' | 'Pendiente' | 'En tránsito';
 
 export async function POST(request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const body = await request.json() as { date?: string; quantity?: number; shipment?: string; fiscal?: string; status?: DeliveryStatus; notes?: string };
+  const body = await request.json() as { date?: string; quantity?: number; shipment?: string; fiscal?: string; notes?: string };
   const quantity = Number(body.quantity);
   if (!quantity || quantity < 1) return Response.json({ error: 'La cantidad debe ser mayor a cero.' }, { status: 400 });
 
@@ -28,11 +27,12 @@ export async function POST(request: Request, context: RouteContext) {
     quantity,
     body.shipment || '',
     body.fiscal || '',
-    body.status || 'Entregado',
+    'En tránsito',
     body.notes || '',
     now,
   ).run();
-  const finalStatus = calculateFinalStatus('signed', record.row.total_quantity, received + quantity);
+  const deliveredQuantity = record.deliveries.filter((delivery) => delivery.status === 'Entregado').reduce((sum, delivery) => sum + delivery.quantity, 0);
+  const finalStatus = calculateFinalStatus('signed', record.row.total_quantity, deliveredQuantity);
   await db.prepare('UPDATE purchase_orders SET final_status = ?1, updated_at = ?2 WHERE id = ?3').bind(finalStatus, now, id).run();
   const order = await getOrder(db, { id });
   return Response.json({ order: serializeOrder(order) }, { status: 201 });

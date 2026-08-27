@@ -209,11 +209,31 @@ button { cursor: pointer; }
 .form-title strong { color: var(--ink-soft); font-size: 13px; }
 .form-title button { border: 0; padding: 0; color: var(--muted); background: transparent; font-size: 22px; line-height: 1; }
 .delivery-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 18px; }
+.automatic-delivery-state { display: grid; align-content: center; min-height: 43px; border: 1px solid #d8d4f2; border-radius: 6px; padding: 8px 11px; background: #efedfb; }
+.automatic-delivery-state span, .automatic-delivery-state strong, .automatic-delivery-state small { display: block; }
+.automatic-delivery-state span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.automatic-delivery-state strong { margin-top: 3px; color: var(--purple); font-size: 13px; }
+.automatic-delivery-state small { margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .form-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; }
 .form-actions .button { padding: 9px 13px; font-size: 12px; }
 .automatic-status { display: flex; align-items: flex-start; gap: 10px; padding: 13px 15px; border: 1px solid var(--line-soft); border-radius: 7px; color: var(--muted); background: var(--surface-alt); font-size: 12px; line-height: 1.5; }
 .automatic-status > span { width: 19px; height: 19px; flex: 0 0 19px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: var(--purple); font-size: 11px; }
 .automatic-status p { margin: 0; }
+.client-deliveries-section { background: #f8fafc; }
+.client-delivery-list { display: grid; gap: 12px; }
+.client-delivery-card { border: 1px solid var(--line); border-radius: 9px; padding: 16px; background: var(--surface); }
+.client-delivery-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.client-delivery-card-top > div > span, .client-delivery-card-top > div > strong, .client-delivery-card-top > div > small { display: block; }
+.client-delivery-card-top > div > span { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.client-delivery-card-top > div > strong { margin-top: 5px; color: var(--ink); font: 800 17px 'Manrope', sans-serif; }
+.client-delivery-card-top > div > small { margin-top: 5px; color: var(--muted); font-size: 11px; }
+.client-delivery-notes { margin: 13px 0 0; border-top: 1px solid var(--line-soft); padding-top: 11px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.confirm-delivery-button { margin-top: 15px; }
+.delivery-confirmed { display: grid; gap: 4px; margin-top: 15px; border: 1px solid #cce7da; border-radius: 7px; padding: 11px 13px; color: #2a654d; background: var(--green-soft); }
+.delivery-confirmed strong { font-size: 12px; }
+.delivery-confirmed small { color: #477662; font-size: 11px; }
+.delivery-sign-form { margin-top: 15px; border-top: 1px solid var(--line-soft); padding-top: 15px; }
+.delivery-sign-form .signature-fields { max-width: none; }
 
 .general-observations textarea { min-height: 180px; resize: vertical; line-height: 1.6; }
 .main-observations { display: block; width: 100%; min-height: 220px; border: 1px solid #dbe3eb; border-radius: 8px; outline: 0; padding: 15px 16px; color: var(--ink-soft); background: #fbfcfd; font-size: 13px; line-height: 1.6; resize: vertical; }
@@ -265,6 +285,7 @@ button { cursor: pointer; }
   .client-readonly { display: none !important; }
   .history-list { grid-template-columns: 1fr; }
   .fields-grid, .recipient-row, .signature-fields, .delivery-form-grid { grid-template-columns: 1fr; }
+  .client-delivery-card-top { flex-direction: column; }
   .sheet-header, .section-heading, .delivery-heading { align-items: flex-start; flex-direction: column; }
   .delivery-heading .button { width: 100%; }
   .sheet-actions { flex-direction: column-reverse; }
