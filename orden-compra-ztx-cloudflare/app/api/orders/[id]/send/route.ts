@@ -12,7 +12,11 @@ export async function POST(request: Request, context: RouteContext) {
   const record = await getOrder(db, { id });
   if (!record) return Response.json({ error: 'No encontramos esta orden.' }, { status: 404 });
 
-  const apiKey = (env as unknown as WorkerSecrets).RESEND_API_KEY;
+  const apiKey =
+  (env as unknown as WorkerSecrets).RESEND_API_KEY ||
+  (typeof process !== 'undefined'
+    ? process.env.RESEND_API_KEY
+    : undefined);
   if (!apiKey) return Response.json({ error: 'El servicio de correo no está disponible en este momento. Verificá la configuración antes de volver a intentar.' }, { status: 503 });
 
   const shareUrl = new URL(`/orden/${record.row.share_token}`, request.url).toString();
