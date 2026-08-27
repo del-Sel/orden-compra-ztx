@@ -1,4 +1,5 @@
 import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
+import { calculateFinalStatus } from '@/lib/order-status';
 
 type RouteContext = { params: Promise<{ id: string }> };
 type DeliveryStatus = 'Entregado' | 'Pendiente' | 'En tránsito';
@@ -31,7 +32,8 @@ export async function POST(request: Request, context: RouteContext) {
     body.notes || '',
     now,
   ).run();
-  await db.prepare('UPDATE purchase_orders SET final_status = ?1, updated_at = ?2 WHERE id = ?3').bind(received + quantity >= record.row.total_quantity ? 'Entrega completa' : 'Entrega parcial', now, id).run();
+  const finalStatus = calculateFinalStatus('signed', record.row.total_quantity, received + quantity);
+  await db.prepare('UPDATE purchase_orders SET final_status = ?1, updated_at = ?2 WHERE id = ?3').bind(finalStatus, now, id).run();
   const order = await getOrder(db, { id });
   return Response.json({ order: serializeOrder(order) }, { status: 201 });
 }
