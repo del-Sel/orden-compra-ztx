@@ -20,7 +20,11 @@ export async function POST(request: Request, context: RouteContext) {
   await db.prepare("UPDATE purchase_orders SET status = 'signed', signature_name = ?1, signature_dni = ?2, signed_at = ?3, updated_at = ?3 WHERE id = ?4").bind(signatureName, signatureDni, signedAt, id).run();
 
   let notificationError = '';
-  const apiKey = (env as unknown as WorkerSecrets).RESEND_API_KEY;
+  const apiKey =
+  (env as unknown as WorkerSecrets).RESEND_API_KEY ||
+  (typeof process !== 'undefined'
+    ? process.env.RESEND_API_KEY
+    : undefined);
   if (!apiKey) {
     notificationError = 'La firma quedó registrada, pero el aviso no pudo enviarse. Verificá la configuración de correo.';
   } else {
