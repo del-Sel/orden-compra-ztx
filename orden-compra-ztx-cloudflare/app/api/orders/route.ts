@@ -1,8 +1,15 @@
 import { CLIENT_EMAIL } from '@/lib/order-config';
-import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
+import { ensureSchema, getDb, getOrder, getOrderSummaries, serializeOrder, serializeOrderSummary } from '@/lib/db';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const history = url.searchParams.get('history');
+  if (history === '1') {
+    const db = getDb();
+    await ensureSchema(db);
+    const orders = await getOrderSummaries(db);
+    return Response.json({ orders: orders.map(serializeOrderSummary) });
+  }
   const id = url.searchParams.get('id') ?? undefined;
   const token = url.searchParams.get('token') ?? undefined;
   if (!id && !token) return Response.json({ error: 'Falta el identificador de la orden.' }, { status: 400 });

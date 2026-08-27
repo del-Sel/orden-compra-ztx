@@ -42,7 +42,18 @@ type Delivery = {
   notes: string;
 };
 
-type ApiPayload = { order?: OrderData & { deliveries?: Delivery[] }; shareUrl?: string; warning?: string; error?: string };
+type OrderSummary = {
+  id: string;
+  number: string;
+  product: string;
+  clientName: string;
+  status: Stage;
+  finalStatus: string;
+  totalQuantity: number;
+  updatedAt: string;
+};
+
+type ApiPayload = { order?: OrderData & { deliveries?: Delivery[] }; orders?: OrderSummary[]; shareUrl?: string; warning?: string; error?: string };
 
 const initialOrder: OrderData = {
   number: '',
@@ -80,6 +91,12 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(parsed);
 }
 
+function formatUpdatedAt(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Sin fecha';
+  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(parsed);
+}
+
 function formatCurrency(value: string) {
   const number = Number(String(value).replace(',', '.'));
   if (Number.isNaN(number)) return value || '—';
@@ -96,6 +113,20 @@ function automaticFinalStatus(stage: Stage, totalQuantity: number, deliveries: D
   return totalQuantity > 0 && registeredQuantity >= totalQuantity ? 'Entrega completa' : 'Entrega parcial';
 }
 
+function historyStatusLabel(order: OrderSummary) {
+  if (order.status === 'draft') return 'Borrador';
+  if (order.status === 'sent') return 'Esperando firma';
+  return order.finalStatus;
+}
+
+function historyStatusClass(order: OrderSummary) {
+  if (order.status === 'draft') return 'status-draft';
+  if (order.status === 'sent') return 'status-sent';
+  if (order.finalStatus === 'Entrega completa') return 'status-complete';
+  if (order.finalStatus === 'Entrega parcial') return 'status-partial';
+  return 'status-pending';
+}
+
 export default function OrderWorkspace({ initialMode, token }: { initialMode: View; token?: string }) {
   const [view, setView] = useState(initialMode);
   const [stage, setStage] = useState<Stage>('draft');
@@ -108,6 +139,8 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [newDelivery, setNewDelivery] = useState({ date: '', quantity: '', shipment: '', fiscal: '', status: '' as DeliveryStatus | '', notes: '' });
   const [isAddingDelivery, setIsAddingDelivery] = useState(false);
+  const [history, setHistory] = useState<OrderSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(initialMode === 'interno');
   const [busy, setBusy] = useState('');
   const [loading, setLoading] = useState(initialMode === 'cliente');
   const [error, setError] = useState('');
@@ -121,6 +154,24 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
   const isSigned = stage === 'signed';
   const activeStage = stageIndex(stage);
   const currentFinalStatus = automaticFinalStatus(stage, totalQuantity, deliveries);
+
+  function applyLoadedOrder(payload: ApiPayload) {
+    if (!payload.order) return;
+    const loaded = normalizeOrder(payload.order);
+    setOrder(loaded);
+    setOrderId(loaded.id ?? '');
+    setDeliveries(payload.order.deliveries ?? []);
+    setStage(loaded.status ?? 'draft');
+    setShareUrl(payload.shareUrl || (loaded.shareToken ? `${window.location.origin}/orden/${loaded.shareToken}` : ''));
+  }
+
+  async function refreshHistory() {
+    if (initialMode !== 'interno' || token) return;
+    const response = await fetch('/api/orders?history=1', { cache: 'no-store' });
+    const payload = await response.json() as ApiPayload;
+    if (!response.ok) throw new Error(payload.error || 'No pudimos cargar el historial.');
+    setHistory(payload.orders ?? []);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -136,12 +187,7 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
         const payload = await response.json() as ApiPayload;
         if (!response.ok || !payload.order) throw new Error(payload.error || 'No encontramos esta orden.');
         if (cancelled) return;
-        const loaded = normalizeOrder(payload.order);
-        setOrder(loaded);
-        setOrderId(loaded.id ?? '');
-        setDeliveries(payload.order.deliveries ?? []);
-        setStage(loaded.status ?? 'draft');
-        setShareUrl(payload.shareUrl || (loaded.shareToken ? `${window.location.origin}/orden/${loaded.shareToken}` : ''));
+        applyLoadedOrder(payload);
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'No pudimos cargar la orden.');
       } finally {
@@ -149,6 +195,23 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
       }
     }
     loadOrder();
+    return () => { cancelled = true; };
+  }, [initialMode, token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHistory() {
+      if (initialMode !== 'interno' || token) return;
+      try {
+        setHistoryLoading(true);
+        await refreshHistory();
+      } catch {
+        if (!cancelled) setHistory([]);
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    }
+    loadHistory();
     return () => { cancelled = true; };
   }, [initialMode, token]);
 
@@ -179,6 +242,27 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
     window.history.replaceState({}, '', '/');
   }
 
+  async function handleSelectHistory(id: string) {
+    setBusy(`history-${id}`);
+    try {
+      const response = await fetch(`/api/orders?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+      const payload = await response.json() as ApiPayload;
+      if (!response.ok || !payload.order) throw new Error(payload.error || 'No pudimos abrir la orden.');
+      applyLoadedOrder(payload);
+      setView('interno');
+      setIsAddingDelivery(false);
+      setSignatureName('');
+      setSignatureDni('');
+      setSignatureAccepted(false);
+      setError('');
+      window.history.replaceState({}, '', `/?id=${encodeURIComponent(id)}`);
+    } catch (historyError) {
+      showToast(historyError instanceof Error ? historyError.message : 'No pudimos abrir la orden.');
+    } finally {
+      setBusy('');
+    }
+  }
+
   async function saveOrder() {
     const response = await fetch(orderId ? `/api/orders/${orderId}` : '/api/orders', {
       method: orderId ? 'PATCH' : 'POST',
@@ -193,6 +277,7 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
     const url = saved.shareToken ? `${window.location.origin}/orden/${saved.shareToken}` : '';
     setShareUrl(url);
     if (!orderId && saved.id) window.history.replaceState({}, '', `/?id=${encodeURIComponent(saved.id)}`);
+    try { await refreshHistory(); } catch { /* El guardado no debe fallar si el historial tarda en actualizarse. */ }
     return saved;
   }
 
@@ -212,6 +297,7 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
       setOrder(sent);
       setStage('sent');
       setShareUrl(payload.shareUrl || (sent.shareToken ? `${window.location.origin}/orden/${sent.shareToken}` : ''));
+      try { await refreshHistory(); } catch { /* El envío ya se completó aunque el historial tarde en actualizarse. */ }
       showToast(`Orden enviada a ${CLIENT_EMAIL}`);
     } catch (sendError) { showToast(sendError instanceof Error ? sendError.message : 'No pudimos enviar la orden.'); } finally { setBusy(''); }
   }
@@ -247,6 +333,7 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
       setDeliveries(payload.order.deliveries ?? []);
       setNewDelivery({ date: '', quantity: '', shipment: '', fiscal: '', status: '', notes: '' });
       setIsAddingDelivery(false);
+      try { await refreshHistory(); } catch { /* La entrega ya se guardó aunque el historial tarde en actualizarse. */ }
       showToast('Entrega parcial registrada online');
     } catch (deliveryError) { showToast(deliveryError instanceof Error ? deliveryError.message : 'No pudimos registrar la entrega.'); } finally { setBusy(''); }
   }
@@ -265,6 +352,13 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
       <header className="topbar"><div className="brand"><div className="brand-mark">Z</div><div><strong>ZTX<span>flow</span></strong><small>{view === 'interno' ? 'Gestión de órdenes' : 'Orden de compra'}</small></div></div><div className="topbar-right">{view === 'interno' && <button type="button" className="button button-light topbar-button" onClick={handleNewOrder}>Nueva orden</button>}<span className="topbar-context">{view === 'interno' ? 'Vista interna' : 'Vista del cliente'}</span>{view === 'interno' && stage !== 'draft' && <button type="button" className="button button-light topbar-button" onClick={() => setView('cliente')}>Vista del cliente ↗</button>}{view === 'cliente' && <button type="button" className="button button-light topbar-button" onClick={() => setView('interno')}>Vista interna ↩</button>}</div></header>
       <main className="page">
         <section className="page-heading"><div><p className="eyebrow">{view === 'interno' ? 'Orden de compra' : 'Revisión del cliente'}</p><h1>{view === 'interno' ? 'Armar orden de compra' : 'Orden de compra recibida'}</h1><p className="heading-copy">{view === 'interno' ? 'Completá la planilla, enviala y esperá la firma del cliente.' : 'Revisá la información y firmá la orden para confirmar su recepción.'}</p></div></section>
+        <div className={`workspace-layout ${view === 'cliente' ? 'client-layout' : ''}`}>
+          {view === 'interno' && <aside className="history-panel">
+            <div className="history-heading"><div><p className="eyebrow">Registro</p><h2>Historial de órdenes</h2></div><button type="button" className="history-new-button" onClick={handleNewOrder}>＋ Nueva</button></div>
+            <p className="history-copy">Accedé a tus órdenes guardadas y retomá cualquier seguimiento.</p>
+            {historyLoading ? <div className="history-empty">Cargando órdenes...</div> : history.length === 0 ? <div className="history-empty"><strong>Aún no hay órdenes</strong><span>Las órdenes guardadas aparecerán acá.</span></div> : <div className="history-list">{history.map((item) => <button type="button" className={`history-item ${item.id === orderId ? 'is-selected' : ''}`} key={item.id} onClick={() => handleSelectHistory(item.id)} disabled={busy.startsWith('history-')}><span className="history-item-top"><strong>{item.number || 'Sin número'}</strong><span className={`history-status ${historyStatusClass(item)}`}>{historyStatusLabel(item)}</span></span><span className="history-product">{item.product || 'Producto sin especificar'}</span><span className="history-meta">{item.clientName || 'Cliente sin nombre'} · {formatUpdatedAt(item.updatedAt)}</span></button>)}</div>}
+          </aside>}
+          <div className="workspace-content">
         <section className="flow-card"><div className="flow-intro"><span className="flow-label">Flujo de la orden</span><span className={`top-status ${stage === 'signed' ? 'is-signed' : stage === 'sent' ? 'is-sent' : ''}`}>{stage === 'signed' ? 'Firmada' : stage === 'sent' ? 'Enviada al cliente' : 'Borrador'}</span></div><div className="flow-steps">{stages.map((item, index) => <div className={`flow-step ${index < activeStage ? 'completed' : ''} ${index === activeStage ? 'current' : ''}`} key={item.label}><span className="flow-number">{index < activeStage ? '✓' : item.step}</span><div><small>Paso {item.step}</small><strong>{item.label}</strong></div>{index < stages.length - 1 && <i className={index < activeStage ? 'completed' : ''} />}</div>)}</div></section>
         {view === 'interno' && stage === 'sent' && <div className="notice notice-sent"><span className="notice-icon">↗</span><div><strong>La orden fue enviada a {CLIENT_EMAIL}</strong><p>El cliente puede abrirla desde el enlace y firmarla online.</p></div></div>}
         {view === 'interno' && isSigned && <div className="notice notice-signed"><span className="notice-icon">✓</span><div><strong>Firma recibida de {order.signatureName || order.clientName}</strong><p>La orden quedó guardada online y ya permite registrar entregas parciales.</p></div></div>}
@@ -283,6 +377,8 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
             {stage === 'draft' && <div className="sheet-actions"><button type="button" className="button button-light" disabled={busy === 'save'} onClick={handleSaveDraft}>{busy === 'save' ? 'Guardando...' : 'Guardar borrador'}</button><button type="button" className="button button-primary" disabled={busy === 'send'} onClick={handleSendOrder}>{busy === 'send' ? 'Enviando...' : 'Enviar al cliente'} <span>→</span></button></div>}
           </>}
         </section>
+          </div>
+        </div>
       </main>
       {toast && <div className="toast" role="status"><span>✓</span>{toast}</div>}
     </div>

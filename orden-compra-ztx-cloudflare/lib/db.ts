@@ -42,6 +42,11 @@ export type DeliveryRow = {
   created_at: string;
 };
 
+export type OrderSummaryRow = Pick<
+  OrderRow,
+  'id' | 'number' | 'product' | 'client_name' | 'status' | 'final_status' | 'total_quantity' | 'updated_at'
+>;
+
 export function getDb() {
   return (env as unknown as WorkerBindings).DB;
 }
@@ -62,6 +67,16 @@ export async function getOrder(db: D1Database, lookup: { id?: string; token?: st
   if (!row) return null;
   const deliveries = await db.prepare('SELECT * FROM deliveries WHERE order_id = ?1 ORDER BY delivery_number ASC').bind(row.id).all<DeliveryRow>();
   return { row, deliveries: deliveries.results };
+}
+
+export async function getOrderSummaries(db: D1Database, limit = 50) {
+  const result = await db.prepare(`
+    SELECT id, number, product, client_name, status, final_status, total_quantity, updated_at
+    FROM purchase_orders
+    ORDER BY updated_at DESC
+    LIMIT ?1
+  `).bind(Math.min(Math.max(limit, 1), 100)).all<OrderSummaryRow>();
+  return result.results;
 }
 
 export function serializeOrder(order: Awaited<ReturnType<typeof getOrder>>) {
@@ -98,5 +113,18 @@ export function serializeOrder(order: Awaited<ReturnType<typeof getOrder>>) {
       status: delivery.status,
       notes: delivery.notes ?? '',
     })),
+  };
+}
+
+export function serializeOrderSummary(row: OrderSummaryRow) {
+  return {
+    id: row.id,
+    number: row.number,
+    product: row.product ?? '',
+    clientName: row.client_name ?? '',
+    status: row.status,
+    finalStatus: row.final_status,
+    totalQuantity: row.total_quantity,
+    updatedAt: row.updated_at,
   };
 }
