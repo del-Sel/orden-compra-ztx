@@ -19,8 +19,8 @@ const localBindingConfig = {
     ? [
         {
           binding: d1,
-          database_name: 'site-creator-d1',
-          database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          database_name: 'orden-compra-ztx-db',
+          database_id: 'f6018559-bcd5-48d3-8002-e75a458baa82',
         },
       ]
     : [],
