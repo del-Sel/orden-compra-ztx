@@ -153,6 +153,17 @@ button { cursor: pointer; }
 
 .recipient-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .field-help { display: block; margin-top: 6px; color: var(--soft); font-size: 10px; line-height: 1.4; }
+.recipient-editor { min-height: 86px; border: 1px solid #dbe3eb; border-radius: 7px; padding: 9px 10px 8px; background: #fbfcfd; }
+.recipient-editor:focus-within { border-color: #9289dc; box-shadow: 0 0 0 3px var(--purple-soft); background: #fff; }
+.recipient-tags { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; }
+.recipient-tag { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border: 1px solid #d7d2f2; border-radius: 999px; padding: 5px 7px 5px 9px; color: #3f397f; background: #f1effc; font-size: 11px; line-height: 1.2; }
+.recipient-tag button { display: inline-grid; place-items: center; width: 17px; height: 17px; border: 0; border-radius: 50%; padding: 0; color: #655bb0; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; }
+.recipient-tag button:hover { color: #fff; background: #655bb0; }
+.recipient-entry { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
+.recipient-entry input { min-width: 0; flex: 1; border: 0; outline: 0; padding: 5px 2px; color: var(--ink-soft); background: transparent; font: inherit; font-size: 12px; }
+.recipient-entry input::placeholder { color: #8b98a8; }
+.recipient-add-button { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; border: 0; border-radius: 6px; color: #fff; background: var(--purple); font-size: 18px; line-height: 1; cursor: pointer; transition: background .18s ease, transform .18s ease; }
+.recipient-add-button:hover { background: var(--purple-strong); transform: translateX(1px); }
 .fixed-email { padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 6px; background: var(--surface-alt); }
 .fixed-email span, .fixed-email strong, .fixed-email small { display: block; }
 .fixed-email span { margin-bottom: 7px; color: var(--muted); font-size: 12px; font-weight: 700; }

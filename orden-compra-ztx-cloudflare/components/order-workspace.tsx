@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 
 type View = 'interno' | 'cliente';
 type Stage = 'draft' | 'sent' | 'signed';
@@ -109,6 +109,14 @@ function formatRecipients(value: string) {
   return value.split(/[;,\s]+/).map((email) => email.trim()).filter(Boolean).join(', ');
 }
 
+function recipientList(value: string) {
+  return [...new Set(value.split(/[;,\s]+/).map((email) => email.trim().toLowerCase()).filter(Boolean))];
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function stageIndex(stage: Stage) {
   return stage === 'signed' ? 3 : stage === 'sent' ? 2 : 0;
 }
@@ -148,6 +156,7 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
   const [deliverySignatureId, setDeliverySignatureId] = useState<number | null>(null);
   const [deliverySignatureName, setDeliverySignatureName] = useState('');
   const [deliverySignatureDni, setDeliverySignatureDni] = useState('');
+  const [recipientDraft, setRecipientDraft] = useState('');
   const [history, setHistory] = useState<OrderSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(initialMode === 'interno');
   const [busy, setBusy] = useState('');
@@ -174,6 +183,7 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
     setDeliveries(payload.order.deliveries ?? []);
     setStage(loaded.status ?? 'draft');
     setShareUrl(payload.shareUrl || (loaded.shareToken ? `${window.location.origin}/orden/${loaded.shareToken}` : ''));
+    setRecipientDraft('');
   }
 
   async function refreshHistory() {
@@ -235,6 +245,28 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
     setOrder((current) => ({ ...current, [field]: value }));
   }
 
+  function addRecipient() {
+    const candidate = recipientDraft.trim().replace(/[;,]+$/, '').toLowerCase();
+    if (!candidate) return;
+    if (!isValidEmail(candidate)) {
+      showToast('Ingresá un correo electrónico válido.');
+      return;
+    }
+    updateOrder('clientEmail', [...new Set([...recipientList(order.clientEmail), candidate])].join(', '));
+    setRecipientDraft('');
+  }
+
+  function removeRecipient(email: string) {
+    updateOrder('clientEmail', recipientList(order.clientEmail).filter((item) => item !== email).join(', '));
+  }
+
+  function handleRecipientKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter' || event.key === ',' || event.key === ';') {
+      event.preventDefault();
+      addRecipient();
+    }
+  }
+
   function handleNewOrder() {
     if (stage === 'draft' && orderId && !window.confirm('La orden actual quedará guardada. ¿Querés comenzar una nueva orden?')) return;
     setView('interno');
@@ -250,6 +282,7 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
     setDeliverySignatureId(null);
     setDeliverySignatureName('');
     setDeliverySignatureDni('');
+    setRecipientDraft('');
     setIsAddingDelivery(false);
     setError('');
     setToast('');
@@ -391,11 +424,10 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
       <header className="topbar"><div className="brand"><img src="/logo-ful-mar.png" alt="Ful-Mar" className="brand-logo" /><div><strong>Órdenes de compra</strong><small>{view === 'interno' ? 'Gestión interna' : 'Revisión del cliente'}</small></div></div><div className="topbar-right">{view === 'interno' && <button type="button" className="button button-light topbar-button" onClick={handleNewOrder}>Nueva orden</button>}<span className="topbar-context">{view === 'interno' ? 'Gestión interna' : 'Revisión'}</span></div></header>
       <main className="page">
         <section className="page-heading"><div><p className="eyebrow">{view === 'interno' ? 'Orden de compra' : 'Revisión del cliente'}</p><h1>{view === 'interno' ? 'Armar orden de compra' : 'Orden de compra recibida'}</h1><p className="heading-copy">{view === 'interno' ? 'Completá la planilla, enviala y esperá la firma del cliente.' : isSigned ? 'Consultá la orden y confirmá cada entrega cuando la recibas.' : 'Revisá la información y firmá la orden para confirmar su recepción.'}</p></div></section>
-        <section className={`hero-banner ${view === 'cliente' ? 'hero-banner-client' : ''}`}><div className="hero-logo-wrap"><img src="/logo-ful-mar.png" alt="Ful-Mar" /></div><div className="hero-copy"><span>{view === 'interno' ? 'FUL-MAR · Gestión de órdenes' : 'FUL-MAR · Orden recibida'}</span><h2>{view === 'interno' ? 'Toda la operación, en un solo lugar.' : isSigned ? 'Confirmación de entregas parciales.' : 'Revisá y firmá la orden de compra.'}</h2><p>{view === 'interno' ? 'Creá órdenes, seguí los despachos y conservá el historial de cada operación.' : isSigned ? 'Cada despacho aparecerá aquí para que puedas confirmar su recepción.' : 'La firma requiere nombre completo y DNI.'}</p></div><div className="hero-mark">{view === 'interno' ? 'OC' : '✓'}</div></section>
+        <section className={`hero-banner ${view === 'cliente' ? 'hero-banner-client' : ''}`}><div className="hero-logo-wrap"><img src="/logo-ful-mar.png" alt="Ful-Mar" /></div><div className="hero-copy"><span>{view === 'interno' ? 'FUL-MAR · Gestión de órdenes' : 'FUL-MAR · Orden recibida'}</span><h2>{view === 'interno' ? 'Gestión de órdenes de compra' : isSigned ? 'Confirmación de entregas parciales' : 'Revisá y firmá la orden de compra'}</h2><p>{view === 'interno' ? 'Nueva orden, seguimiento y entregas.' : isSigned ? 'Confirmá la recepción de cada despacho.' : 'La firma requiere nombre completo y DNI.'}</p></div><div className="hero-mark">{view === 'interno' ? 'OC' : '✓'}</div></section>
         <div className={`workspace-layout ${view === 'cliente' ? 'client-layout' : ''}`}>
           {view === 'interno' && <aside className="history-panel">
             <div className="history-heading"><div><p className="eyebrow">Registro</p><h2>Historial de órdenes</h2></div><button type="button" className="history-new-button" onClick={handleNewOrder}>＋ Nueva</button></div>
-            <p className="history-copy">Accedé a tus órdenes guardadas y retomá cualquier seguimiento.</p>
             {historyLoading ? <div className="history-empty">Cargando órdenes...</div> : history.length === 0 ? <div className="history-empty"><strong>Aún no hay órdenes</strong><span>Las órdenes guardadas aparecerán acá.</span></div> : <div className="history-list">{history.map((item) => <button type="button" className={`history-item ${item.id === orderId ? 'is-selected' : ''}`} key={item.id} onClick={() => handleSelectHistory(item.id)} disabled={busy.startsWith('history-')}><span className="history-item-top"><strong>{item.number || 'Sin número'}</strong><span className={`history-status ${historyStatusClass(item)}`}>{historyStatusLabel(item)}</span></span><span className="history-product">{item.product || 'Producto sin especificar'}</span><span className="history-meta">{item.clientName || 'Cliente sin nombre'} · {formatUpdatedAt(item.updatedAt)}</span></button>)}</div>}
           </aside>}
           <div className="workspace-content">
@@ -408,7 +440,7 @@ export default function OrderWorkspace({ initialMode, token }: { initialMode: Vi
         <section className={`order-sheet ${view === 'cliente' ? 'client-sheet' : ''}`}>
           <div className="sheet-header"><div><span className="sheet-kicker">Orden de Compra Autotaxímetro ZTX-PRO</span><h2>{order.number || 'Sin número de orden'}</h2></div><span className={`sheet-status ${isSigned ? 'status-complete' : stage === 'sent' ? 'status-sent' : 'status-draft'}`}>{isSigned ? 'Firmada' : stage === 'sent' ? 'Esperando firma' : 'Borrador'}</span></div>
           <div className="sheet-section"><div className="section-heading"><div><span className="section-number">01</span><div><h3>Datos generales de la Orden de Compra</h3><p>{view === 'interno' ? 'Completá la información principal.' : 'Información principal de la orden.'}</p></div></div></div><div className="fields-grid"><label className="field"><span>N.º de Orden de Compra</span>{canEdit ? <input value={order.number} onChange={(event) => updateOrder('number', event.target.value)} /> : <strong>{order.number || '—'}</strong>}</label><label className="field"><span>Fecha de emisión</span>{canEdit ? <input type="date" value={order.issueDate} onChange={(event) => updateOrder('issueDate', event.target.value)} /> : <strong>{formatDate(order.issueDate)}</strong>}</label><label className="field"><span>Solicita</span>{canEdit ? <input value={order.requestedBy} onChange={(event) => updateOrder('requestedBy', event.target.value)} /> : <strong>{order.requestedBy || '—'}</strong>}</label><label className="field"><span>Condición de pago</span>{canEdit ? <input value={order.payment} onChange={(event) => updateOrder('payment', event.target.value)} /> : <strong>{order.payment || '—'}</strong>}</label><label className="field"><span>Fecha de entrega pactada</span>{canEdit ? <input type="date" value={order.dueDate} onChange={(event) => updateOrder('dueDate', event.target.value)} /> : <strong>{formatDate(order.dueDate)}</strong>}</label><label className="field"><span>Responsable de la compra</span>{canEdit ? <input value={order.buyer} onChange={(event) => updateOrder('buyer', event.target.value)} /> : <strong>{order.buyer || '—'}</strong>}</label></div></div>
-          <div className="sheet-section"><div className="section-heading"><div><span className="section-number">02</span><div><h3>Datos del destinatario</h3><p>Podés indicar uno o varios correos.</p></div></div></div><div className="recipient-row"><label className="field"><span>Nombre del cliente</span>{canEdit ? <input value={order.clientName} onChange={(event) => updateOrder('clientName', event.target.value)} /> : <strong>{order.clientName || '—'}</strong>}</label><label className="field recipient-email-field"><span>Correos electrónicos</span>{canEdit ? <textarea value={order.clientEmail} onChange={(event) => updateOrder('clientEmail', event.target.value)} rows={2} placeholder="cliente@empresa.com, otro@empresa.com" /> : <strong>{formatRecipients(order.clientEmail) || '—'}</strong>}<small className="field-help">Separalos con coma, espacio o punto y coma.</small></label></div></div>
+          <div className="sheet-section"><div className="section-heading"><div><span className="section-number">02</span><div><h3>Datos del destinatario</h3><p>Destinatarios de la orden.</p></div></div></div><div className="recipient-row"><label className="field"><span>Nombre del cliente</span>{canEdit ? <input value={order.clientName} onChange={(event) => updateOrder('clientName', event.target.value)} /> : <strong>{order.clientName || '—'}</strong>}</label><div className="field recipient-email-field"><span>Correos electrónicos</span>{canEdit ? <div className="recipient-editor"><div className="recipient-tags">{recipientList(order.clientEmail).map((email) => <span className="recipient-tag" key={email}>{email}<button type="button" aria-label={`Quitar ${email}`} onClick={() => removeRecipient(email)}>×</button></span>)}</div><div className="recipient-entry"><input type="text" value={recipientDraft} onChange={(event) => setRecipientDraft(event.target.value)} onKeyDown={handleRecipientKeyDown} placeholder="Agregar correo electrónico" /><button type="button" className="recipient-add-button" aria-label="Agregar correo electrónico" onClick={addRecipient}>→</button></div><small className="field-help">Escribí un correo y presioná la flecha para agregarlo.</small></div> : <strong>{formatRecipients(order.clientEmail) || '—'}</strong>}</div></div></div>
           <div className="sheet-section"><div className="section-heading"><div><span className="section-number">03</span><div><h3>Detalle de productos/servicios</h3><p>Podés registrar la cantidad total del pedido.</p></div></div></div><div className="table-scroll"><table className="purchase-table"><thead><tr><th>Producto</th><th>Descripción</th><th>Precio (R$)</th><th>Cantidad total</th><th>Observaciones</th></tr></thead><tbody><tr><td>{canEdit ? <input value={order.product} onChange={(event) => updateOrder('product', event.target.value)} /> : <strong>{order.product || '—'}</strong>}</td><td>{canEdit ? <input value={order.description} onChange={(event) => updateOrder('description', event.target.value)} /> : <span>{order.description || '—'}</span>}</td><td>{canEdit ? <input value={order.unitPrice} onChange={(event) => updateOrder('unitPrice', event.target.value)} placeholder="0,00" /> : <span>{formatCurrency(order.unitPrice)}</span>}</td><td>{canEdit ? <input type="number" min="1" value={order.totalQuantity} onChange={(event) => updateOrder('totalQuantity', event.target.value)} /> : <strong>{totalQuantity.toLocaleString('es-AR')} u.</strong>}</td><td>{canEdit ? <textarea className="product-notes-input" value={order.productNotes} onChange={(event) => updateOrder('productNotes', event.target.value)} rows={3} /> : <span className="product-notes-readonly">{order.productNotes || '—'}</span>}</td></tr></tbody></table></div>{canEdit && <div className="sheet-total"><span>Total estimado (R$)</span><strong>{formatCurrency((Number(order.unitPrice || 0) * Number(order.totalQuantity || 0)).toFixed(2))}</strong></div>}</div>
           {view === 'cliente' && <div className="signature-section"><div className="signature-heading"><div><span className="section-number">04</span><div><h3>Firma del cliente</h3><p>La firma confirma que la orden fue recibida y revisada.</p></div></div><span className={`signature-state ${isSigned ? 'signed' : ''}`}>{isSigned ? '✓ Firmada' : 'Pendiente'}</span></div>{isSigned ? <div className="signed-confirmation"><span>✓</span><div><strong>Orden firmada correctamente</strong><p>La firma quedó registrada y la orden está disponible para continuar con el seguimiento.</p><small>Firmante: {order.signatureName || '—'} · DNI: {order.signatureDni || '—'}</small></div></div> : <><div className="signature-fields"><label className="field signature-field"><span>Nombre completo</span><input autoFocus value={signatureName} onChange={(event) => setSignatureName(event.target.value)} placeholder="Ingresá tu nombre completo" /></label><label className="field signature-field"><span>DNI</span><input inputMode="numeric" value={signatureDni} onChange={(event) => setSignatureDni(event.target.value)} placeholder="Ingresá tu DNI" /></label></div><label className="check-row"><input type="checkbox" checked={signatureAccepted} onChange={(event) => setSignatureAccepted(event.target.checked)} /><span>Confirmo que revisé la orden de compra y acepto su contenido.</span></label><button type="button" className="button button-primary sign-button" disabled={busy === 'sign' || !signatureName.trim() || !signatureDni.trim() || !signatureAccepted} onClick={handleSignOrder}>{busy === 'sign' ? 'Registrando firma...' : 'Firmar orden y enviar confirmación'} <span>→</span></button></>}</div>}
           {view === 'cliente' && isSigned && <div className="sheet-section client-deliveries-section"><div className="section-heading"><div><span className="section-number">05</span><div><h3>Confirmación de entregas parciales</h3><p>Firmá cada entrega cuando recibas la cantidad indicada.</p></div></div></div>{deliveries.length === 0 ? <div className="empty-deliveries">Todavía no hay entregas parciales registradas.</div> : <div className="client-delivery-list">{deliveries.map((delivery) => <article className="client-delivery-card" key={delivery.id}><div className="client-delivery-card-top"><div><span>Entrega {String(delivery.deliveryNumber).padStart(2, '0')}</span><strong>{delivery.quantity.toLocaleString('es-AR')} equipos</strong><small>{formatDate(delivery.date)}{delivery.shipment ? ` · ${delivery.shipment}` : ''}</small></div><span className={`delivery-status ${delivery.status === 'Entregado' ? 'delivered' : 'transit'}`}><i />{delivery.status}</span></div>{delivery.notes && <p className="client-delivery-notes">{delivery.notes}</p>}{delivery.status === 'Entregado' ? <div className="delivery-confirmed"><strong>Recepción confirmada</strong>{delivery.receivedByName && <small>Firmó: {delivery.receivedByName} · DNI: {delivery.receivedByDni || '—'}</small>}</div> : deliverySignatureId === delivery.id ? <div className="delivery-sign-form"><div className="signature-fields"><label className="field signature-field"><span>Nombre completo</span><input autoFocus value={deliverySignatureName} onChange={(event) => setDeliverySignatureName(event.target.value)} placeholder="Ingresá tu nombre completo" /></label><label className="field signature-field"><span>DNI</span><input inputMode="numeric" value={deliverySignatureDni} onChange={(event) => setDeliverySignatureDni(event.target.value)} placeholder="Ingresá tu DNI" /></label></div><div className="form-actions"><button type="button" className="button button-light" onClick={() => { setDeliverySignatureId(null); setDeliverySignatureName(''); setDeliverySignatureDni(''); }}>Cancelar</button><button type="button" className="button button-primary" disabled={busy === `delivery-sign-${delivery.id}` || !deliverySignatureName.trim() || !deliverySignatureDni.trim()} onClick={handleSignDelivery}>{busy === `delivery-sign-${delivery.id}` ? 'Confirmando...' : 'Firmar recepción'}</button></div></div> : <button type="button" className="button button-primary confirm-delivery-button" onClick={() => { setDeliverySignatureId(delivery.id); setDeliverySignatureName(''); setDeliverySignatureDni(''); }}>Confirmar recepción →</button>}</article>)}</div>}</div>}
