@@ -1,5 +1,5 @@
 import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
-import { CLIENT_EMAIL } from '@/lib/order-config';
+import { parseEmailList } from '@/lib/order-config';
 import { calculateFinalStatus, type OrderStage } from '@/lib/order-status';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -33,7 +33,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     String(body.productNotes ?? ''),
     String(body.generalNotes ?? ''),
     String(body.clientName ?? ''),
-    CLIENT_EMAIL,
+    parseEmailList(String(body.clientEmail ?? '')).join(', '),
     finalStatus,
     now,
     id,

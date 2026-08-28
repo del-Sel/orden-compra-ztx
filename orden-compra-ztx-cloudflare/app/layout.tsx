@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ZTXflow · Órdenes de compra',
-  description: 'Gestión de órdenes de compra, firma digital y entregas parciales para ZTX.',
+  title: 'FUL-MAR · Órdenes de compra',
+  description: 'Gestión de órdenes de compra, firma y entregas parciales.',
 };
 
 export default function RootLayout({

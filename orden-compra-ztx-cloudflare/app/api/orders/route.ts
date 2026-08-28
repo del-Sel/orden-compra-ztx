@@ -1,4 +1,4 @@
-import { CLIENT_EMAIL } from '@/lib/order-config';
+import { parseEmailList } from '@/lib/order-config';
 import { ensureSchema, getDb, getOrder, getOrderSummaries, serializeOrder, serializeOrderSummary } from '@/lib/db';
 
 export async function GET(request: Request) {
@@ -23,6 +23,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const body = await request.json() as Record<string, unknown>;
+  const clientEmail = parseEmailList(String(body.clientEmail ?? '')).join(', ');
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const shareToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '');
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     String(body.productNotes ?? ''),
     String(body.generalNotes ?? ''),
     String(body.clientName ?? ''),
-    CLIENT_EMAIL,
+    clientEmail,
     now,
   ).run();
 

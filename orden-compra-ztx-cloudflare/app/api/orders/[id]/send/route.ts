@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { FROM_EMAIL, CLIENT_EMAIL } from '@/lib/order-config';
+import { FROM_EMAIL, parseEmailList } from '@/lib/order-config';
 import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -11,6 +11,8 @@ export async function POST(request: Request, context: RouteContext) {
   await ensureSchema(db);
   const record = await getOrder(db, { id });
   if (!record) return Response.json({ error: 'No encontramos esta orden.' }, { status: 404 });
+  const recipients = parseEmailList(record.row.client_email);
+  if (recipients.length === 0) return Response.json({ error: 'Agregá al menos un correo del cliente antes de enviar la orden.' }, { status: 400 });
 
   const apiKey =
   (env as unknown as WorkerSecrets).RESEND_API_KEY ||
@@ -25,9 +27,9 @@ export async function POST(request: Request, context: RouteContext) {
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: FROM_EMAIL,
-      to: [CLIENT_EMAIL],
+      to: recipients,
       subject: `Orden de compra ${record.row.number} para revisar y firmar`,
-         html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>Orden de compra ${record.row.number}</h2><p>Hola ${record.row.client_name || 'cliente'},</p><p>Te enviamos la orden de compra <strong>${record.row.product || 'solicitada'}</strong> para que la revises y la firmes online.</p><p><a href="${shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Revisar y firmar orden</a></p><p>Una vez firmada, la orden quedará disponible para continuar con el seguimiento de entregas.</p></div>`,
+         html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>Orden de compra ${record.row.number}</h2><p>Hola ${record.row.client_name || 'cliente'},</p><p>Enviamos la orden de compra <strong>${record.row.product || 'solicitada'}</strong> para que la revises y la firmes online.</p><p><a href="${shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Revisar y firmar orden</a></p><p>Una vez firmada, la orden quedará disponible para continuar con el seguimiento de entregas.</p></div>`,
     }),
   });
   if (!response.ok) {
