@@ -445,6 +445,49 @@ export default function OrderWorkspace({
     }
   }
 
+  async function handleDeleteOrder(item: OrderSummary) {
+    const label = item.number || item.product || "esta orden";
+    if (
+      !window.confirm(
+        `¿Querés eliminar ${label}? También se eliminarán sus entregas y firmas. Esta acción no se puede deshacer.`,
+      )
+    )
+      return;
+
+    setBusy(`delete-${item.id}`);
+    try {
+      const response = await fetch(`/api/orders/${item.id}`, { method: "DELETE" });
+      const payload = (await response.json()) as ApiPayload;
+      if (!response.ok)
+        throw new Error(payload.error || "No pudimos eliminar la orden.");
+
+      setHistory((current) => current.filter((entry) => entry.id !== item.id));
+      if (item.id === orderId) {
+        setView("interno");
+        setStage("draft");
+        setOrder(initialOrder);
+        setDeliveries([]);
+        setOrderId("");
+        setShareUrl("");
+        setSignatureName("");
+        setSignatureDni("");
+        setSignatureAccepted(false);
+        setRecipientDraft("");
+        setIsAddingDelivery(false);
+        window.history.replaceState({}, "", "/");
+      }
+      showToast("Orden eliminada.");
+    } catch (deleteError) {
+      showToast(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "No pudimos eliminar la orden.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function saveOrder() {
     const response = await fetch(
       orderId ? `/api/orders/${orderId}` : "/api/orders",
@@ -788,29 +831,40 @@ export default function OrderWorkspace({
               ) : (
                 <div className="history-list">
                   {history.map((item) => (
-                    <button
-                      type="button"
-                      className={`history-item ${item.id === orderId ? "is-selected" : ""}`}
-                      key={item.id}
-                      onClick={() => handleSelectHistory(item.id)}
-                      disabled={busy.startsWith("history-")}
-                    >
-                      <span className="history-item-top">
-                        <strong>{item.number || "Sin número"}</strong>
-                        <span
-                          className={`history-status ${historyStatusClass(item)}`}
-                        >
-                          {historyStatusLabel(item)}
+                    <div className="history-item-row" key={item.id}>
+                      <button
+                        type="button"
+                        className={`history-item ${item.id === orderId ? "is-selected" : ""}`}
+                        onClick={() => handleSelectHistory(item.id)}
+                        disabled={Boolean(busy)}
+                      >
+                        <span className="history-item-top">
+                          <strong>{item.number || "Sin número"}</strong>
+                          <span
+                            className={`history-status ${historyStatusClass(item)}`}
+                          >
+                            {historyStatusLabel(item)}
+                          </span>
                         </span>
-                      </span>
-                      <span className="history-product">
-                        {item.product || "Producto sin especificar"}
-                      </span>
-                      <span className="history-meta">
-                        {item.clientName || "Cliente sin nombre"} ·{" "}
-                        {formatUpdatedAt(item.updatedAt)}
-                      </span>
-                    </button>
+                        <span className="history-product">
+                          {item.product || "Producto sin especificar"}
+                        </span>
+                        <span className="history-meta">
+                          {item.clientName || "Cliente sin nombre"} ·{" "}
+                          {formatUpdatedAt(item.updatedAt)}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="history-delete-button"
+                        onClick={() => handleDeleteOrder(item)}
+                        disabled={Boolean(busy)}
+                        aria-label={`Eliminar ${item.number || "esta orden"}`}
+                        title="Eliminar orden"
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

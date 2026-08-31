@@ -42,3 +42,18 @@ export async function PATCH(request: Request, context: RouteContext) {
   const order = await getOrder(db, { id });
   return Response.json({ order: serializeOrder(order) });
 }
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  const { id } = await context.params;
+  const db = getDb();
+  await ensureSchema(db);
+  const existing = await getOrder(db, { id });
+  if (!existing) return Response.json({ error: "No encontramos esta orden." }, { status: 404 });
+
+  await db.batch([
+    db.prepare("DELETE FROM deliveries WHERE order_id = ?1").bind(id),
+    db.prepare("DELETE FROM purchase_orders WHERE id = ?1").bind(id),
+  ]);
+
+  return Response.json({ ok: true, id });
+}
