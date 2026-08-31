@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { calculateFinalStatus, normalizeFinalStatus } from "@/lib/order-status";
 
 type View = "interno" | "cliente";
 type Stage = "draft" | "sent" | "signed";
@@ -164,28 +165,39 @@ function automaticFinalStatus(
   stage: Stage,
   totalQuantity: number,
   deliveries: Delivery[],
+  savedStatus: string,
 ) {
+  const normalizedSavedStatus = normalizeFinalStatus(savedStatus);
+  if (normalizedSavedStatus === "Cancelada") return normalizedSavedStatus;
+  if (normalizedSavedStatus === "Cerrada") return normalizedSavedStatus;
   const deliveredQuantity = deliveries
     .filter((delivery) => delivery.status === "Entregado")
     .reduce((sum, delivery) => sum + delivery.quantity, 0);
-  if (stage !== "signed" || deliveredQuantity <= 0)
-    return "Pendiente de entrega";
-  return totalQuantity > 0 && deliveredQuantity >= totalQuantity
-    ? "Entrega completa"
-    : "Entrega parcial";
+  return calculateFinalStatus(stage, totalQuantity, deliveredQuantity);
 }
 
 function historyStatusLabel(order: OrderSummary) {
+  const finalStatus = normalizeFinalStatus(order.finalStatus);
+  if (finalStatus === "Cancelada" || finalStatus === "Cerrada") return finalStatus;
   if (order.status === "draft") return "Borrador";
   if (order.status === "sent") return "Esperando firma";
-  return order.finalStatus;
+  return finalStatus;
 }
 
 function historyStatusClass(order: OrderSummary) {
+  const finalStatus = normalizeFinalStatus(order.finalStatus);
+  if (finalStatus === "Cancelada") return "status-cancelled";
+  if (finalStatus === "Cerrada") return "status-complete";
   if (order.status === "draft") return "status-draft";
   if (order.status === "sent") return "status-sent";
-  if (order.finalStatus === "Entrega completa") return "status-complete";
-  if (order.finalStatus === "Entrega parcial") return "status-partial";
+  if (finalStatus === "Entrega parcial") return "status-partial";
+  return "status-pending";
+}
+
+function finalStatusClass(status: string) {
+  if (status === "Cancelada") return "status-cancelled";
+  if (status === "Cerrada") return "status-complete";
+  if (status === "Entrega parcial") return "status-partial";
   return "status-pending";
 }
 
@@ -245,14 +257,18 @@ export default function OrderWorkspace({
   const progress = totalQuantity
     ? Math.min(Math.round((receivedQuantity / totalQuantity) * 100), 100)
     : 0;
-  const canEdit = view === "interno" && stage === "draft";
   const isSigned = stage === "signed";
-  const activeStage = stageIndex(stage);
   const currentFinalStatus = automaticFinalStatus(
     stage,
     totalQuantity,
     deliveries,
+    order.finalStatus,
   );
+  const isClosed = currentFinalStatus === "Cerrada";
+  const isCancelled = currentFinalStatus === "Cancelada";
+  const canEdit =
+    view === "interno" && stage === "draft" && !isClosed && !isCancelled;
+  const activeStage = stageIndex(stage);
 
   function applyLoadedOrder(payload: ApiPayload) {
     if (!payload.order) return;
@@ -482,6 +498,44 @@ export default function OrderWorkspace({
         deleteError instanceof Error
           ? deleteError.message
           : "No pudimos eliminar la orden.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleCancelOrder() {
+    if (!orderId || isClosed || isCancelled) return;
+    const label = order.number || order.product || "esta orden";
+    if (
+      !window.confirm(
+        `¿Querés cancelar ${label}? Va a quedar en el historial como cancelada y no permitirá nuevas acciones.`,
+      )
+    )
+      return;
+
+    setBusy("cancel");
+    try {
+      const response = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as ApiPayload;
+      if (!response.ok || !payload.order)
+        throw new Error(payload.error || "No pudimos cancelar la orden.");
+      const cancelled = normalizeOrder(payload.order);
+      setOrder(cancelled);
+      setDeliveries(payload.order.deliveries ?? []);
+      try {
+        await refreshHistory();
+      } catch {
+        /* La cancelación ya se guardó aunque el historial tarde en actualizarse. */
+      }
+      showToast("Orden cancelada.");
+    } catch (cancelError) {
+      showToast(
+        cancelError instanceof Error
+          ? cancelError.message
+          : "No pudimos cancelar la orden.",
       );
     } finally {
       setBusy("");
@@ -876,9 +930,13 @@ export default function OrderWorkspace({
                 <div className="flow-intro">
                   <span className="flow-label">Estado de la orden</span>
                   <span
-                    className={`top-status ${stage === "signed" ? "is-signed" : stage === "sent" ? "is-sent" : ""}`}
+                    className={`top-status ${isCancelled ? "is-cancelled" : isClosed ? "is-closed" : stage === "signed" ? "is-signed" : stage === "sent" ? "is-sent" : ""}`}
                   >
-                    {stage === "signed"
+                    {isCancelled
+                      ? "Cancelada"
+                      : isClosed
+                        ? "Cerrada"
+                        : stage === "signed"
                       ? "Firmada"
                       : stage === "sent"
                         ? "Enviada al cliente"
@@ -975,15 +1033,31 @@ export default function OrderWorkspace({
                   </span>
                   <h2>{order.number || "Sin número de orden"}</h2>
                 </div>
-                <span
-                  className={`sheet-status ${isSigned ? "status-complete" : stage === "sent" ? "status-sent" : "status-draft"}`}
-                >
-                  {isSigned
+                <div className="sheet-header-actions">
+                  <span
+                    className={`sheet-status ${isCancelled || isClosed ? finalStatusClass(currentFinalStatus) : isSigned ? "status-complete" : stage === "sent" ? "status-sent" : "status-draft"}`}
+                  >
+                    {isCancelled
+                      ? "Cancelada"
+                      : isClosed
+                        ? "Cerrada"
+                        : isSigned
                     ? "Firmada"
                     : stage === "sent"
                       ? "Esperando firma"
                       : "Borrador"}
-                </span>
+                  </span>
+                  {view === "interno" && orderId && !isClosed && !isCancelled && (
+                    <button
+                      type="button"
+                      className="button button-danger"
+                      onClick={handleCancelOrder}
+                      disabled={busy === "cancel"}
+                    >
+                      {busy === "cancel" ? "Cancelando..." : "Cancelar orden"}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="sheet-section">
                 <div className="section-heading">
@@ -1279,12 +1353,24 @@ export default function OrderWorkspace({
                       </div>
                     </div>
                     <span
-                      className={`signature-state ${isSigned ? "signed" : ""}`}
+                      className={`signature-state ${isCancelled ? "cancelled" : isSigned ? "signed" : ""}`}
                     >
-                      {isSigned ? "✓ Firmada" : "Pendiente"}
+                      {isCancelled
+                        ? "Cancelada"
+                        : isSigned
+                          ? "✓ Firmada"
+                          : "Pendiente"}
                     </span>
                   </div>
-                  {isSigned ? (
+                  {isCancelled ? (
+                    <div className="signed-confirmation cancelled-confirmation">
+                      <span>!</span>
+                      <div>
+                        <strong>Orden cancelada</strong>
+                        <p>Esta orden ya no admite firma ni confirmaciones.</p>
+                      </div>
+                    </div>
+                  ) : isSigned ? (
                     <div className="signed-confirmation">
                       <span>✓</span>
                       <div>
@@ -1358,7 +1444,7 @@ export default function OrderWorkspace({
                   )}
                 </div>
               )}
-              {view === "cliente" && isSigned && (
+              {view === "cliente" && isSigned && !isCancelled && (
                 <div className="sheet-section client-deliveries-section">
                   <div className="section-heading">
                     <div>
@@ -1504,16 +1590,18 @@ export default function OrderWorkspace({
               )}
               {view === "interno" && (
                 <>
-                  {!isSigned ? (
+                  {!isSigned || isCancelled ? (
                     <div className="locked-section">
                       <div className="lock-icon">⌁</div>
                       <div>
                         <strong>Seguimiento de entregas parciales</strong>
                         <p>
-                          Se habilita una vez que el cliente firme la orden.
+                          {isCancelled
+                            ? "La orden fue cancelada y no admite nuevas entregas."
+                            : "Se habilita una vez que el cliente firme la orden."}
                         </p>
                       </div>
-                      <span>Bloqueado</span>
+                      <span>{isCancelled ? "Cancelada" : "Bloqueado"}</span>
                     </div>
                   ) : (
                     <div className="sheet-section deliveries-section">
@@ -1739,7 +1827,7 @@ export default function OrderWorkspace({
                       </div>
                     </div>
                   )}
-                  {!isSigned ? (
+                  {!isSigned && !isCancelled ? (
                     <div className="locked-section final-locked">
                       <div className="lock-icon">⌁</div>
                       <div>
@@ -1762,7 +1850,7 @@ export default function OrderWorkspace({
                           </div>
                         </div>
                         <span
-                          className={`sheet-status ${currentFinalStatus === "Entrega completa" ? "status-complete" : currentFinalStatus === "Entrega parcial" ? "status-partial" : "status-pending"}`}
+                          className={`sheet-status ${finalStatusClass(currentFinalStatus)}`}
                         >
                           {currentFinalStatus}
                         </span>
@@ -1770,10 +1858,12 @@ export default function OrderWorkspace({
                       <div className="automatic-status">
                         <span>✓</span>
                         <p>
-                          {currentFinalStatus === "Entrega completa"
-                            ? "La cantidad total de la orden ya fue recibida."
+                          {currentFinalStatus === "Cerrada"
+                            ? "La cantidad total de la orden ya fue recibida y la orden quedó cerrada."
                             : currentFinalStatus === "Entrega parcial"
                               ? "Ya se confirmaron entregas, pero todavía queda cantidad pendiente."
+                              : currentFinalStatus === "Cancelada"
+                                ? "La orden fue cancelada y no admite nuevas acciones."
                               : inTransitQuantity > 0
                                 ? `${inTransitQuantity.toLocaleString("es-AR")} equipos están en tránsito y todavía esperan la confirmación del cliente.`
                                 : "Todavía no se confirmó ninguna entrega para esta orden."}
@@ -1807,7 +1897,7 @@ export default function OrderWorkspace({
                       </p>
                     )}
                   </div>
-                  {stage === "draft" && (
+                  {stage === "draft" && !isCancelled && !isClosed && (
                     <div className="sheet-actions">
                       <button
                         type="button"

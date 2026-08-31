@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   signature_name TEXT,
   signature_dni TEXT,
   signed_at TEXT,
+  email_thread_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

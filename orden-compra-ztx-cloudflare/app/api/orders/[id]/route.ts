@@ -1,6 +1,6 @@
 import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
 import { parseEmailList } from '@/lib/order-config';
-import { calculateFinalStatus, type OrderStage } from '@/lib/order-status';
+import { calculateFinalStatus, isTerminalFinalStatus, type OrderStage } from '@/lib/order-status';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,6 +11,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   await ensureSchema(db);
   const existing = await getOrder(db, { id });
   if (!existing) return Response.json({ error: 'No encontramos esta orden.' }, { status: 404 });
+  if (isTerminalFinalStatus(existing.row.final_status)) {
+    return Response.json({ error: 'Esta orden ya está cerrada o cancelada y no puede editarse.' }, { status: 409 });
+  }
   const now = new Date().toISOString();
   const stage = (existing.row.status || 'draft') as OrderStage;
   const deliveredQuantity = existing.deliveries.filter((delivery) => delivery.status === 'Entregado').reduce((sum, delivery) => sum + delivery.quantity, 0);

@@ -87,6 +87,9 @@ button { cursor: pointer; }
 .button-primary:disabled { cursor: not-allowed; opacity: .48; transform: none; }
 .button-light { border: 1px solid var(--line); color: var(--ink-soft); background: var(--surface); }
 .button-light:hover { border-color: #bbc8d6; background: var(--surface-alt); }
+.button-danger { border: 1px solid #efcaca; color: #a44848; background: #fff7f7; }
+.button-danger:hover { border-color: #dda6a6; background: #fff0f0; }
+.button-danger:disabled { cursor: not-allowed; opacity: .55; }
 .button span { font-size: 17px; font-weight: 400; line-height: 10px; }
 
 .flow-card { margin-bottom: 16px; padding: 19px 23px 20px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); box-shadow: 0 5px 16px rgba(24, 42, 65, .04); }
@@ -95,6 +98,8 @@ button { cursor: pointer; }
 .top-status { padding: 6px 10px; border-radius: 5px; color: var(--muted); background: #edf1f5; font-size: 11px; font-weight: 700; }
 .top-status.is-sent { color: var(--orange); background: var(--orange-soft); }
 .top-status.is-signed { color: var(--green); background: var(--green-soft); }
+.top-status.is-closed { color: var(--green); background: var(--green-soft); }
+.top-status.is-cancelled { color: #a44848; background: #fff0f0; }
 .flow-steps { display: flex; align-items: flex-start; }
 .flow-step { position: relative; z-index: 1; display: flex; align-items: center; gap: 9px; flex: 1; color: var(--soft); }
 .flow-step:last-child { flex: 0 0 auto; }
@@ -132,6 +137,7 @@ button { cursor: pointer; }
 
 .order-sheet { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 8px 24px rgba(31, 50, 76, .06); }
 .sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px; border-bottom: 1px solid var(--line); }
+.sheet-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .sheet-kicker { display: block; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .sheet-header h2 { margin: 0; color: var(--ink); font: 800 21px 'Manrope', sans-serif; letter-spacing: -.45px; }
 .sheet-status { padding: 7px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; white-space: nowrap; }
@@ -140,6 +146,7 @@ button { cursor: pointer; }
 .status-pending { color: var(--orange); background: var(--orange-soft); }
 .status-partial { color: var(--purple); background: var(--purple-soft); }
 .status-complete { color: var(--green); background: var(--green-soft); }
+.status-cancelled { color: #a44848; background: #fff0f0; }
 
 .sheet-section { padding: 25px 28px; border-bottom: 1px solid var(--line); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 19px; }
@@ -191,6 +198,7 @@ button { cursor: pointer; }
 .signature-heading > div { display: flex; gap: 12px; }
 .signature-state { color: var(--orange); font-size: 12px; font-weight: 800; }
 .signature-state.signed { color: var(--green); }
+.signature-state.cancelled { color: #a44848; }
 .signature-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 800px; }
 .signature-field { max-width: none; }
 .check-row { display: flex; align-items: flex-start; gap: 9px; max-width: 560px; margin-top: 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
@@ -201,6 +209,10 @@ button { cursor: pointer; }
 .signed-confirmation strong { display: block; color: #2a654d; font-size: 13px; }
 .signed-confirmation p { margin: 4px 0 0; color: #5f8876; font-size: 12px; line-height: 1.45; }
 .signed-confirmation small { display: block; margin-top: 8px; color: #477662; font-size: 11px; }
+.cancelled-confirmation { border-color: #efcaca; background: #fff7f7; }
+.cancelled-confirmation > span { color: #fff; background: #b95a5a; }
+.cancelled-confirmation strong { color: #8d3f3f; }
+.cancelled-confirmation p { color: #a96969; }
 
 .locked-section { display: flex; align-items: center; gap: 12px; padding: 20px 28px; border-bottom: 1px solid var(--line); background: var(--surface-alt); }
 .lock-icon { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 7px; color: var(--soft); background: #e7edf3; font-size: 18px; }

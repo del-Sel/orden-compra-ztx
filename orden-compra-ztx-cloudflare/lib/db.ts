@@ -25,6 +25,7 @@ export type OrderRow = {
   signature_name: string | null;
   signature_dni: string | null;
   signed_at: string | null;
+  email_thread_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -61,6 +62,7 @@ export async function ensureSchema(db: D1Database) {
     'ALTER TABLE deliveries ADD COLUMN received_by_name TEXT',
     'ALTER TABLE deliveries ADD COLUMN received_by_dni TEXT',
     'ALTER TABLE deliveries ADD COLUMN received_at TEXT',
+    'ALTER TABLE purchase_orders ADD COLUMN email_thread_id TEXT',
   ];
   for (const statement of compatibilityColumns) {
     try {
@@ -69,6 +71,7 @@ export async function ensureSchema(db: D1Database) {
       if (!String(error).toLowerCase().includes('duplicate column')) throw error;
     }
   }
+  await db.prepare("UPDATE purchase_orders SET final_status = 'Cerrada' WHERE final_status = 'Entrega completa'").run();
 }
 
 export async function getOrder(db: D1Database, lookup: { id?: string; token?: string }) {

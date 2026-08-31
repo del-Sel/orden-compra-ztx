@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { FROM_EMAIL, INTERNAL_EMAILS, parseEmailList } from '@/lib/order-config';
 import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
-import { calculateFinalStatus } from '@/lib/order-status';
+import { orderMessageId, replyEmailHeaders, resolveSentMessageId } from '@/lib/email-thread';
+import { calculateFinalStatus, isTerminalFinalStatus } from '@/lib/order-status';
 
 type RouteContext = { params: Promise<{ id: string; deliveryId: string }> };
 type WorkerSecrets = { RESEND_API_KEY?: string };
@@ -19,6 +20,9 @@ export async function POST(request: Request, context: RouteContext) {
   await ensureSchema(db);
   const record = await getOrder(db, { id });
   if (!record) return Response.json({ error: 'No encontramos esta orden.' }, { status: 404 });
+  if (isTerminalFinalStatus(record.row.final_status)) {
+    return Response.json({ error: 'Esta orden ya está cerrada o cancelada.' }, { status: 409 });
+  }
   if (record.row.status !== 'signed') return Response.json({ error: 'La orden debe estar firmada antes de confirmar entregas.' }, { status: 409 });
 
   const delivery = record.deliveries.find((item) => item.id === numericDeliveryId);
@@ -53,7 +57,8 @@ export async function POST(request: Request, context: RouteContext) {
     notificationError = 'La recepción quedó registrada, pero no hay destinatarios internos configurados.';
   } else {
     const internalUrl = new URL(`/?id=${encodeURIComponent(id)}`, request.url).toString();
-    const closedMessage = finalStatus === 'Entrega completa'
+    const threadId = record.row.email_thread_id || orderMessageId(id);
+    const closedMessage = finalStatus === 'Cerrada'
       ? `<p>Se ha cerrado la orden de compra porque se confirmó la totalidad de las unidades.</p>`
       : `<p>La orden continúa abierta para registrar las entregas pendientes.</p>`;
     const response = await fetch('https://api.resend.com/emails', {
@@ -62,13 +67,16 @@ export async function POST(request: Request, context: RouteContext) {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: recipients,
-        subject: finalStatus === 'Entrega completa'
-          ? `Orden ${record.row.number} cerrada`
-          : `Entrega ${delivery.delivery_number} de la orden ${record.row.number} confirmada`,
-        html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>${finalStatus === 'Entrega completa' ? 'Orden cerrada' : 'Entrega parcial confirmada'}</h2><p>Se ha entregado la entrega parcial <strong>${delivery.delivery_number}</strong> de la orden <strong>${record.row.number}</strong>.</p><p>Cantidad recibida: <strong>${delivery.quantity}</strong> equipos.</p><p>Confirmó la recepción: <strong>${signatureName}</strong> (DNI: ${signatureDni}).</p>${closedMessage}<p><a href="${internalUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Abrir orden</a></p></div>`,
+        subject: `Re: Orden de compra ${record.row.number} — ${finalStatus === 'Cerrada' ? 'Orden cerrada' : `Entrega ${delivery.delivery_number} confirmada`}`,
+        headers: replyEmailHeaders(threadId),
+        html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>${finalStatus === 'Cerrada' ? 'Orden cerrada' : 'Entrega parcial confirmada'}</h2><p>Se ha entregado la entrega parcial <strong>${delivery.delivery_number}</strong> de la orden <strong>${record.row.number}</strong>.</p><p>Cantidad recibida: <strong>${delivery.quantity}</strong> equipos.</p><p>Confirmó la recepción: <strong>${signatureName}</strong> (DNI: ${signatureDni}).</p>${closedMessage}<p><a href="${internalUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Abrir orden</a></p></div>`,
       }),
     });
     if (!response.ok) notificationError = `La recepción quedó registrada, pero no se pudo enviar el aviso: ${await response.text()}`;
+    else {
+      const storedMessageId = await resolveSentMessageId(apiKey, response, threadId);
+      await db.prepare('UPDATE purchase_orders SET email_thread_id = COALESCE(email_thread_id, ?1) WHERE id = ?2').bind(record.row.email_thread_id || storedMessageId, id).run();
+    }
   }
 
   const order = await getOrder(db, { id });
