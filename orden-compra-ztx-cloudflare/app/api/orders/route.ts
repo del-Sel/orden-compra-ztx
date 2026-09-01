@@ -1,5 +1,5 @@
 import { parseEmailList } from '@/lib/order-config';
-import { ensureSchema, getDb, getOrder, getOrderSummaries, serializeOrder, serializeOrderSummary } from '@/lib/db';
+import { allocateOrderNumber, ensureSchema, getDb, getOrder, getOrderSummaries, serializeOrder, serializeOrderSummary } from '@/lib/db';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   const shareToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '');
   const db = getDb();
   await ensureSchema(db);
+  const orderNumber = await allocateOrderNumber(db);
 
   await db.prepare(`INSERT INTO purchase_orders (
     id, share_token, number, issue_date, requested_by, payment, due_date, buyer,
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 'draft', 'Pendiente de entrega', ?18, ?18)`).bind(
     id,
     shareToken,
-    String(body.number ?? ''),
+    orderNumber,
     String(body.issueDate ?? ''),
     String(body.requestedBy ?? ''),
     String(body.payment ?? ''),

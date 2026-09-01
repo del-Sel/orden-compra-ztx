@@ -57,6 +57,22 @@ export function getDb() {
   return (env as unknown as WorkerBindings).DB;
 }
 
+export async function allocateOrderNumber(db: D1Database) {
+  const sequence = await db
+    .prepare(`
+      UPDATE purchase_order_sequence
+      SET next_number = next_number + 1
+      WHERE id = 1
+      RETURNING next_number - 1 AS allocated_number
+    `)
+    .first<{ allocated_number: number }>();
+  const allocatedNumber = Number(sequence?.allocated_number);
+  if (!Number.isInteger(allocatedNumber) || allocatedNumber < 1) {
+    throw new Error('No fue posible asignar el número de la orden.');
+  }
+  return `OC-${String(allocatedNumber).padStart(6, '0')}`;
+}
+
 export async function ensureSchema(db: D1Database) {
   await db.batch(schemaStatements.map((statement) => db.prepare(statement)));
   const compatibilityColumns = [
@@ -75,6 +91,17 @@ export async function ensureSchema(db: D1Database) {
       if (!String(error).toLowerCase().includes('duplicate column')) throw error;
     }
   }
+  await db.prepare(`
+    INSERT OR IGNORE INTO purchase_order_sequence (id, next_number)
+    SELECT 1,
+      COALESCE(MAX(
+        CASE
+          WHEN number LIKE 'OC-%' THEN CAST(SUBSTR(number, 4) AS INTEGER)
+          ELSE CAST(number AS INTEGER)
+        END
+      ), 0) + 1
+    FROM purchase_orders
+  `).run();
   await db.prepare("UPDATE deliveries SET received_quantity = quantity WHERE status = 'Entregado' AND received_quantity = 0").run();
 }
 

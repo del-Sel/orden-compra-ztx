@@ -1150,9 +1150,9 @@ export default function OrderWorkspace({
                     {canEdit ? (
                       <input
                         value={order.number}
-                        onChange={(event) =>
-                          updateOrder("number", event.target.value)
-                        }
+                        readOnly
+                        placeholder="Se asignará al guardar la orden"
+                        aria-readonly="true"
                       />
                     ) : (
                       <strong>{order.number || "—"}</strong>

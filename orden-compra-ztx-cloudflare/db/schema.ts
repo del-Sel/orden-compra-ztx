@@ -26,6 +26,10 @@ export const schemaStatements = [
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS purchase_order_sequence (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    next_number INTEGER NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS deliveries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id TEXT NOT NULL,
