@@ -99,11 +99,11 @@ function normalizeOrder(
   };
 }
 
-function formatDate(value: string) {
+function formatDate(value: string, locale = "es-AR") {
   if (!value) return "—";
   const parsed = new Date(`${value}T12:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("es-AR", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -131,6 +131,10 @@ function formatCurrency(value: string) {
   }).format(number);
 }
 
+function formatQuantity(value: number, locale = "es-AR") {
+  return value.toLocaleString(locale);
+}
+
 function formatRecipients(value: string) {
   return value
     .split(/[;,\s]+/)
@@ -152,6 +156,34 @@ function recipientList(value: string) {
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function clientStatusLabel(status: string) {
+  if (status === "Entregado") return "Entregue";
+  if (status === "Pendiente") return "Pendente";
+  if (status === "En tránsito") return "Em trânsito";
+  return status;
+}
+
+function clientFinalStatusLabel(status: string) {
+  if (status === "Cancelada") return "Cancelado";
+  if (status === "Cerrada") return "Encerrada";
+  if (status === "Entrega completa") return "Entrega completa";
+  if (status === "Entrega parcial") return "Entrega parcial";
+  return status;
+}
+
+function clientErrorMessage(message: string) {
+  const translations: Record<string, string> = {
+    "No encontramos esta orden.": "Não foi possível localizar este pedido.",
+    "La firma requiere nombre completo y DNI.": "A assinatura requer nome completo e CPF.",
+    "La confirmación requiere nombre completo y DNI.": "A confirmação requer nome completo e CPF.",
+    "No pudimos registrar la firma.": "Não foi possível registrar a assinatura.",
+    "No pudimos confirmar la entrega.": "Não foi possível confirmar a entrega.",
+    "No pudimos cargar la orden.": "Não foi possível carregar o pedido.",
+    "Esta orden ya está cerrada o cancelada.": "Este pedido está encerrado ou cancelado.",
+  };
+  return translations[message] || message;
 }
 
 function receivedQuantityFor(delivery: Delivery) {
@@ -241,6 +273,10 @@ export default function OrderWorkspace({
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
 
+  useEffect(() => {
+    document.documentElement.lang = view === "cliente" ? "pt-BR" : "es";
+  }, [view]);
+
   const totalQuantity = Math.max(Number(order.totalQuantity) || 0, 0);
   const sentQuantity = useMemo(
     () => deliveries.reduce((sum, delivery) => sum + delivery.quantity, 0),
@@ -321,12 +357,13 @@ export default function OrderWorkspace({
         if (cancelled) return;
         applyLoadedOrder(payload);
       } catch (loadError) {
-        if (!cancelled)
-          setError(
+        if (!cancelled) {
+          const message =
             loadError instanceof Error
               ? loadError.message
-              : "No pudimos cargar la orden.",
-          );
+              : "No pudimos cargar la orden.";
+          setError(initialMode === "cliente" ? clientErrorMessage(message) : message);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -691,13 +728,18 @@ export default function OrderWorkspace({
       setSignatureName("");
       setSignatureDni("");
       setSignatureAccepted(false);
-      if (payload.warning) showToast(payload.warning);
-      else showToast("Orden firmada y confirmada.");
+      if (payload.warning)
+        showToast(
+          "A assinatura foi registrada, mas não foi possível enviar a notificação por e-mail.",
+        );
+      else showToast("Pedido assinado e confirmado.");
     } catch (signError) {
-      showToast(
+      const message =
         signError instanceof Error
           ? signError.message
-          : "No pudimos registrar la firma.",
+          : "No pudimos registrar la firma.";
+      showToast(
+        view === "cliente" ? clientErrorMessage(message) : message,
       );
     } finally {
       setBusy("");
@@ -784,13 +826,17 @@ export default function OrderWorkspace({
       setDeliverySignatureName("");
       setDeliverySignatureDni("");
       if (payload.warning)
-        showToast(`Recepción confirmada. ${payload.warning}`);
-      else showToast("Recepción confirmada y aviso enviado.");
+        showToast(
+          "Recebimento confirmado, mas não foi possível enviar a notificação por e-mail.",
+        );
+      else showToast("Recebimento confirmado e notificação enviada.");
     } catch (deliverySignError) {
-      showToast(
+      const message =
         deliverySignError instanceof Error
           ? deliverySignError.message
-          : "No pudimos confirmar la entrega.",
+          : "No pudimos confirmar la entrega.";
+      showToast(
+        view === "cliente" ? clientErrorMessage(message) : message,
       );
     } finally {
       setBusy("");
@@ -805,14 +851,14 @@ export default function OrderWorkspace({
 
   if (loading)
     return (
-      <div className="loading-page">
+      <div className="loading-page" lang={initialMode === "cliente" ? "pt-BR" : "es"}>
         <div className="loading-card" role="status" aria-live="polite">
           <div className="loading-logo-frame">
             <img src="/logo-ful-mar.png" alt="Ful-Mar" className="loading-logo" />
           </div>
           <div className="loading-copy">
-            <strong>Cargando orden de compra</strong>
-            <span>Un momento, por favor.</span>
+            <strong>{initialMode === "cliente" ? "Carregando o pedido de compra" : "Cargando orden de compra"}</strong>
+            <span>{initialMode === "cliente" ? "Aguarde um momento, por favor." : "Un momento, por favor."}</span>
           </div>
           <span className="loading-progress" aria-hidden="true" />
         </div>
@@ -820,24 +866,24 @@ export default function OrderWorkspace({
     );
   if (error)
     return (
-      <div className="error-page">
+      <div className="error-page" lang={initialMode === "cliente" ? "pt-BR" : "es"}>
         <div className="loading-card error-card">
           <div className="loading-logo-frame">
             <img src="/logo-ful-mar.png" alt="Ful-Mar" className="loading-logo" />
           </div>
-          <h1>No pudimos abrir esta orden</h1>
+          <h1>{initialMode === "cliente" ? "Não foi possível abrir este pedido" : "No pudimos abrir esta orden"}</h1>
           <p>{error}</p>
         </div>
       </div>
     );
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" lang={view === "cliente" ? "pt-BR" : "es"}>
       <header className="topbar">
         <div className="brand">
           <img src="/logo-ful-mar-wordmark.jpg" alt="Ful-Mar" className="brand-logo" />
           <div>
-            <strong>Órdenes de compra</strong>
+            <strong>{view === "cliente" ? "Ordens de compra" : "Órdenes de compra"}</strong>
           </div>
         </div>
         <div className="topbar-right">
@@ -863,21 +909,21 @@ export default function OrderWorkspace({
             <span>
               {view === "interno"
                 ? "Autotaxímetro ZTX-PRO"
-                : "Orden de compra"}
+                : "Pedido de compra"}
             </span>
             <h2>
               {view === "interno"
                 ? "Gestión de órdenes"
                 : isSigned
-                  ? "Confirmación de entregas parciales"
-                  : "Revisá y firmá la orden de compra"}
+                  ? "Confirmação de entregas parciais"
+                  : "Revise e assine o pedido de compra"}
             </h2>
             <p>
               {view === "interno"
                 ? "Creá, enviá y seguí cada entrega."
                 : isSigned
-                  ? "Confirmá la recepción de cada despacho."
-                  : "La firma requiere nombre completo y DNI."}
+                  ? "Confirme o recebimento de cada despacho."
+                  : "A assinatura requer nome completo e CPF."}
             </p>
           </div>
         </section>
@@ -1008,19 +1054,19 @@ export default function OrderWorkspace({
               <div className="client-banner">
                 <div className="client-badge">✓</div>
                 <div>
-                  <strong>
-                    {isSigned
-                      ? "Orden confirmada"
-                      : "Orden enviada para revisión"}
-                  </strong>
-                  <span>
-                    {isSigned
-                      ? "Podés confirmar cada entrega recibida."
-                      : "La firma requiere nombre completo y DNI."}
-                  </span>
-                </div>
-                <span className="client-readonly">Solo lectura</span>
-              </div>
+                 <strong>
+                   {isSigned
+                      ? "Pedido confirmado"
+                      : "Pedido enviado para análise"}
+                 </strong>
+                 <span>
+                   {isSigned
+                      ? "É possível confirmar cada entrega recebida."
+                      : "A assinatura requer nome completo e CPF."}
+                 </span>
+               </div>
+              <span className="client-readonly">Somente leitura</span>
+             </div>
             )}
             {view === "interno" && stage !== "draft" && shareUrl && (
               <div className="share-panel">
@@ -1040,25 +1086,46 @@ export default function OrderWorkspace({
               <div className="sheet-header">
                 <div>
                   <span className="sheet-kicker">
-                    Orden de Compra Autotaxímetro ZTX-PRO
+                    {view === "cliente"
+                      ? "Pedido de compra — Autotaxímetro ZTX-PRO"
+                      : "Orden de Compra Autotaxímetro ZTX-PRO"}
                   </span>
-                  <h2>{order.number || "Sin número de orden"}</h2>
+                  <h2>
+                    {order.number ||
+                      (view === "cliente"
+                        ? "Sem número de pedido"
+                        : "Sin número de orden")}
+                  </h2>
                 </div>
                 <div className="sheet-header-actions">
                   <span
                     className={`sheet-status ${isCancelled || isClosed || isComplete ? finalStatusClass(currentFinalStatus) : isSigned ? "status-complete" : stage === "sent" ? "status-sent" : "status-draft"}`}
                   >
-                    {isCancelled
-                      ? "Cancelada"
-                      : isClosed
-                        ? "Cerrada"
-                        : isComplete
-                          ? "Entrega completa"
-                          : isSigned
-                            ? "Firmada"
-                            : stage === "sent"
-                              ? "Esperando firma"
-                              : "Borrador"}
+                    {view === "cliente"
+                      ? clientFinalStatusLabel(
+                          isCancelled
+                            ? "Cancelada"
+                            : isClosed
+                              ? "Cerrada"
+                              : isComplete
+                                ? "Entrega completa"
+                                : isSigned
+                                  ? "Assinado"
+                                  : stage === "sent"
+                                    ? "Aguardando assinatura"
+                                    : "Rascunho",
+                        )
+                      : isCancelled
+                        ? "Cancelada"
+                        : isClosed
+                          ? "Cerrada"
+                          : isComplete
+                            ? "Entrega completa"
+                            : isSigned
+                              ? "Firmada"
+                              : stage === "sent"
+                                ? "Esperando firma"
+                                : "Borrador"}
                   </span>
                   {view === "interno" && orderId && !isClosed && !isCancelled && !isComplete && (
                     <button
@@ -1077,18 +1144,26 @@ export default function OrderWorkspace({
                   <div>
                     <span className="section-number">01</span>
                     <div>
-                      <h3>Datos generales de la Orden de Compra</h3>
+                      <h3>
+                        {view === "cliente"
+                          ? "Dados gerais do pedido de compra"
+                          : "Datos generales de la Orden de Compra"}
+                      </h3>
                       <p>
                         {view === "interno"
                           ? "Completá la información principal."
-                          : "Información principal de la orden."}
+                          : "Informações principais do pedido."}
                       </p>
                     </div>
                   </div>
                 </div>
                 <div className="fields-grid">
                   <label className="field">
-                    <span>N.º de Orden de Compra</span>
+                    <span>
+                      {view === "cliente"
+                        ? "Nº do pedido de compra"
+                        : "N.º de Orden de Compra"}
+                    </span>
                     {canEdit ? (
                       <input
                         value={order.number}
@@ -1101,7 +1176,9 @@ export default function OrderWorkspace({
                     )}
                   </label>
                   <label className="field">
-                    <span>Fecha de emisión</span>
+                    <span>
+                      {view === "cliente" ? "Data de emissão" : "Fecha de emisión"}
+                    </span>
                     {canEdit ? (
                       <input
                         type="date"
@@ -1111,11 +1188,16 @@ export default function OrderWorkspace({
                         }
                       />
                     ) : (
-                      <strong>{formatDate(order.issueDate)}</strong>
+                      <strong>
+                        {formatDate(
+                          order.issueDate,
+                          view === "cliente" ? "pt-BR" : "es-AR",
+                        )}
+                      </strong>
                     )}
                   </label>
                   <label className="field">
-                    <span>Solicita</span>
+                    <span>{view === "cliente" ? "Solicitante" : "Solicita"}</span>
                     {canEdit ? (
                       <input
                         value={order.requestedBy}
@@ -1128,7 +1210,11 @@ export default function OrderWorkspace({
                     )}
                   </label>
                   <label className="field">
-                    <span>Condición de pago</span>
+                    <span>
+                      {view === "cliente"
+                        ? "Condição de pagamento"
+                        : "Condición de pago"}
+                    </span>
                     {canEdit ? (
                       <input
                         value={order.payment}
@@ -1141,7 +1227,11 @@ export default function OrderWorkspace({
                     )}
                   </label>
                   <label className="field">
-                    <span>Fecha de entrega pactada</span>
+                    <span>
+                      {view === "cliente"
+                        ? "Data de entrega acordada"
+                        : "Fecha de entrega pactada"}
+                    </span>
                     {canEdit ? (
                       <input
                         type="date"
@@ -1151,11 +1241,20 @@ export default function OrderWorkspace({
                         }
                       />
                     ) : (
-                      <strong>{formatDate(order.dueDate)}</strong>
+                      <strong>
+                        {formatDate(
+                          order.dueDate,
+                          view === "cliente" ? "pt-BR" : "es-AR",
+                        )}
+                      </strong>
                     )}
                   </label>
                   <label className="field">
-                    <span>Responsable de la compra</span>
+                    <span>
+                      {view === "cliente"
+                        ? "Responsável pela compra"
+                        : "Responsable de la compra"}
+                    </span>
                     {canEdit ? (
                       <input
                         value={order.buyer}
@@ -1169,7 +1268,7 @@ export default function OrderWorkspace({
                   </label>
                 </div>
                 <label className="field general-data-notes">
-                  <span>Observaciones</span>
+                  <span>{view === "cliente" ? "Observações" : "Observaciones"}</span>
                   {canEdit ? (
                     <textarea
                       value={order.generalDataNotes}
@@ -1191,14 +1290,24 @@ export default function OrderWorkspace({
                   <div>
                     <span className="section-number">02</span>
                     <div>
-                      <h3>Datos del destinatario</h3>
-                      <p>Destinatarios de la orden.</p>
+                      <h3>
+                        {view === "cliente"
+                          ? "Dados do destinatário"
+                          : "Datos del destinatario"}
+                      </h3>
+                      <p>
+                        {view === "cliente"
+                          ? "Dados do destinatário do pedido."
+                          : "Destinatarios de la orden."}
+                      </p>
                     </div>
                   </div>
                 </div>
                 <div className="recipient-row">
                   <label className="field">
-                    <span>Nombre del cliente</span>
+                    <span>
+                      {view === "cliente" ? "Nome do cliente" : "Nombre del cliente"}
+                    </span>
                     {canEdit ? (
                       <input
                         value={order.clientName}
@@ -1211,7 +1320,11 @@ export default function OrderWorkspace({
                     )}
                   </label>
                   <div className="field recipient-email-field">
-                    <span>Correos electrónicos</span>
+                    <span>
+                      {view === "cliente"
+                        ? "Endereços de e-mail"
+                        : "Correos electrónicos"}
+                    </span>
                     {canEdit ? (
                       <div className="recipient-editor">
                         <div className="recipient-tags">
@@ -1264,8 +1377,16 @@ export default function OrderWorkspace({
                   <div>
                     <span className="section-number">03</span>
                     <div>
-                      <h3>Detalle de productos/servicios</h3>
-                      <p>Podés registrar la cantidad total del pedido.</p>
+                      <h3>
+                        {view === "cliente"
+                          ? "Detalhes dos produtos/serviços"
+                          : "Detalle de productos/servicios"}
+                      </h3>
+                      <p>
+                        {view === "cliente"
+                          ? "Quantidade total solicitada."
+                          : "Podés registrar la cantidad total del pedido."}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1273,11 +1394,11 @@ export default function OrderWorkspace({
                   <table className="purchase-table">
                     <thead>
                       <tr>
-                        <th>Producto</th>
-                        <th>Descripción</th>
-                        <th>Precio (R$)</th>
-                        <th>Cantidad total</th>
-                        <th>Observaciones</th>
+                        <th>{view === "cliente" ? "Produto" : "Producto"}</th>
+                        <th>{view === "cliente" ? "Descrição" : "Descripción"}</th>
+                        <th>Preço (R$)</th>
+                        <th>{view === "cliente" ? "Quantidade total" : "Cantidad total"}</th>
+                        <th>{view === "cliente" ? "Observações" : "Observaciones"}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1331,7 +1452,11 @@ export default function OrderWorkspace({
                             />
                           ) : (
                             <strong>
-                              {totalQuantity.toLocaleString("es-AR")} u.
+                              {formatQuantity(
+                                totalQuantity,
+                                view === "cliente" ? "pt-BR" : "es-AR",
+                              )}{" "}
+                              {view === "cliente" ? "un." : "u."}
                             </strong>
                           )}
                         </td>
@@ -1375,10 +1500,10 @@ export default function OrderWorkspace({
                     <div>
                       <span className="section-number">04</span>
                       <div>
-                        <h3>Firma del cliente</h3>
+                        <h3>Assinatura do cliente</h3>
                         <p>
-                          La firma confirma que la orden fue recibida y
-                          revisada.
+                          A assinatura confirma o recebimento e a conferência
+                          do pedido.
                         </p>
                       </div>
                     </div>
@@ -1386,31 +1511,31 @@ export default function OrderWorkspace({
                       className={`signature-state ${isCancelled ? "cancelled" : isSigned ? "signed" : ""}`}
                     >
                       {isCancelled
-                        ? "Cancelada"
+                        ? "Cancelado"
                         : isSigned
-                          ? "✓ Firmada"
-                          : "Pendiente"}
+                          ? "✓ Assinado"
+                          : "Pendente"}
                     </span>
                   </div>
                   {isCancelled ? (
                     <div className="signed-confirmation cancelled-confirmation">
                       <span>!</span>
                       <div>
-                        <strong>Orden cancelada</strong>
-                        <p>Esta orden ya no admite firma ni confirmaciones.</p>
+                        <strong>Pedido cancelado</strong>
+                        <p>Este pedido não permite mais assinatura nem confirmações.</p>
                       </div>
                     </div>
                   ) : isSigned ? (
                     <div className="signed-confirmation">
                       <span>✓</span>
                       <div>
-                        <strong>Orden firmada correctamente</strong>
+                        <strong>Pedido assinado com sucesso</strong>
                         <p>
-                          La firma quedó registrada y la orden está disponible
-                          para continuar con el seguimiento.
+                          A assinatura foi registrada e o pedido está disponível
+                          para acompanhamento.
                         </p>
                         <small>
-                          Firmante: {order.signatureName || "—"} · DNI:{" "}
+                          Assinante: {order.signatureName || "—"} · CPF:{" "}
                           {order.signatureDni || "—"}
                         </small>
                       </div>
@@ -1419,25 +1544,25 @@ export default function OrderWorkspace({
                     <>
                       <div className="signature-fields">
                         <label className="field signature-field">
-                          <span>Nombre completo</span>
+                          <span>Nome completo</span>
                           <input
                             autoFocus
                             value={signatureName}
                             onChange={(event) =>
                               setSignatureName(event.target.value)
                             }
-                            placeholder="Ingresá tu nombre completo"
+                            placeholder="Digite seu nome completo"
                           />
                         </label>
                         <label className="field signature-field">
-                          <span>DNI</span>
+                          <span>CPF</span>
                           <input
                             inputMode="numeric"
                             value={signatureDni}
                             onChange={(event) =>
                               setSignatureDni(event.target.value)
                             }
-                            placeholder="Ingresá tu DNI"
+                            placeholder="Digite seu CPF"
                           />
                         </label>
                       </div>
@@ -1450,8 +1575,8 @@ export default function OrderWorkspace({
                           }
                         />
                         <span>
-                          Confirmo que revisé la orden de compra y acepto su
-                          contenido.
+                          Confirmo que revisei o pedido de compra e aceito seu
+                          conteúdo.
                         </span>
                       </label>
                       <button
@@ -1466,8 +1591,8 @@ export default function OrderWorkspace({
                         onClick={handleSignOrder}
                       >
                         {busy === "sign"
-                          ? "Registrando firma..."
-                          : "Firmar orden y enviar confirmación"}{" "}
+                          ? "Registrando assinatura..."
+                          : "Assinar pedido e enviar confirmação"}{" "}
                         <span>→</span>
                       </button>
                     </>
@@ -1480,9 +1605,9 @@ export default function OrderWorkspace({
                     <div>
                       <span className="section-number">05</span>
                       <div>
-                        <h3>Confirmación de entregas parciales</h3>
+                        <h3>Confirmação de entregas parciais</h3>
                         <p>
-                          Firmá cada entrega cuando recibas la cantidad
+                          Assine cada entrega após receber a quantidade
                           indicada.
                         </p>
                       </div>
@@ -1490,7 +1615,7 @@ export default function OrderWorkspace({
                   </div>
                   {deliveries.length === 0 ? (
                     <div className="empty-deliveries">
-                      Todavía no hay entregas parciales registradas.
+                      Ainda não há entregas parciais registradas.
                     </div>
                   ) : (
                     <div className="client-delivery-list">
@@ -1510,13 +1635,13 @@ export default function OrderWorkspace({
                               </span>
                               <strong>
                                 {delivery.status === "Entregado"
-                                  ? String(receivedQuantityFor(delivery).toLocaleString("es-AR")) + " equipos recibidos"
-                                  : String(delivery.quantity.toLocaleString("es-AR")) + " equipos enviados"}
+                                  ? `${formatQuantity(receivedQuantityFor(delivery), "pt-BR")} equipamentos recebidos`
+                                  : `${formatQuantity(delivery.quantity, "pt-BR")} equipamentos enviados`}
                               </strong>
                               <small>
                                 {delivery.status === "Entregado" && delivery.receivedAt
-                                  ? "Entregado el " + formatDate(delivery.receivedAt.slice(0, 10))
-                                  : "Despachado el " + formatDate(delivery.date)}
+                                  ? "Entregue em " + formatDate(delivery.receivedAt.slice(0, 10), "pt-BR")
+                                  : "Despachado em " + formatDate(delivery.date, "pt-BR")}
                                 {delivery.shipment
                                   ? " · " + delivery.shipment
                                   : ""}
@@ -1526,7 +1651,7 @@ export default function OrderWorkspace({
                               className={`delivery-status ${delivery.status === "Entregado" ? "delivered" : delivery.status === "Pendiente" ? "pending" : "transit"}`}
                             >
                               <i />
-                              {delivery.status}
+                              {clientStatusLabel(delivery.status)}
                             </span>
                           </div>
                           {delivery.notes && (
@@ -1536,10 +1661,10 @@ export default function OrderWorkspace({
                           )}
                           {delivery.status === "Entregado" ? (
                             <div className="delivery-confirmed">
-                              <strong>Recepción confirmada</strong>
+                              <strong>Recebimento confirmado</strong>
                               {delivery.receivedByName && (
                                 <small>
-                                  Firmó: {delivery.receivedByName} · DNI:{" "}
+                                  Assinado por: {delivery.receivedByName} · CPF:{" "}
                                   {delivery.receivedByDni || "—"}
                                 </small>
                               )}
@@ -1548,7 +1673,7 @@ export default function OrderWorkspace({
                             <div className="delivery-sign-form">
                               <div className="signature-fields">
                                 <label className="field signature-field">
-                                  <span>Nombre completo</span>
+                                  <span>Nome completo</span>
                                   <input
                                     autoFocus
                                     value={deliverySignatureName}
@@ -1557,11 +1682,11 @@ export default function OrderWorkspace({
                                         event.target.value,
                                       )
                                     }
-                                    placeholder="Ingresá tu nombre completo"
+                                    placeholder="Digite seu nome completo"
                                   />
                                 </label>
                                 <label className="field signature-field">
-                                  <span>DNI</span>
+                                  <span>CPF</span>
                                   <input
                                     inputMode="numeric"
                                     value={deliverySignatureDni}
@@ -1570,7 +1695,7 @@ export default function OrderWorkspace({
                                         event.target.value,
                                       )
                                     }
-                                    placeholder="Ingresá tu DNI"
+                                    placeholder="Digite seu CPF"
                                   />
                                 </label>
                               </div>
@@ -1598,7 +1723,7 @@ export default function OrderWorkspace({
                                 >
                                   {busy === `delivery-sign-${delivery.id}`
                                     ? "Confirmando..."
-                                    : "Firmar recepción"}
+                                    : "Assinar recebimento"}
                                 </button>
                               </div>
                             </div>
@@ -1612,7 +1737,7 @@ export default function OrderWorkspace({
                                 setDeliverySignatureDni("");
                               }}
                             >
-                              Confirmar recepción →
+                              Confirmar recebimento →
                             </button>
                           )}
                         </article>

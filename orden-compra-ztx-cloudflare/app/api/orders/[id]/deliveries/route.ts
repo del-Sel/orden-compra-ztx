@@ -60,9 +60,9 @@ export async function POST(request: Request, context: RouteContext) {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: recipients,
-        subject: `Re: Orden de compra ${record.row.number} — Entrega parcial ${nextNumber}`,
+        subject: `Re: Pedido de compra ${record.row.number} — Entrega parcial ${nextNumber}`,
         headers: replyEmailHeaders(threadId),
-        html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>Entrega parcial de la orden ${record.row.number}</h2><p>Enviamos la entrega parcial <strong>${nextNumber}</strong> por <strong>${quantity}</strong> equipos.</p><p>La entrega se encuentra <strong>en tránsito</strong>. Cuando la recibas, ingresá al siguiente enlace para confirmar la recepción con tu nombre y DNI.</p><p><a href="${shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Confirmar recepción</a></p></div>`,
+        html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>Entrega parcial do pedido ${record.row.number}</h2><p>Encaminhamos a entrega parcial <strong>${nextNumber}</strong>, contendo <strong>${quantity}</strong> equipamentos.</p><p>A entrega encontra-se <strong>em trânsito</strong>. Após recebê-la, acesse o link abaixo para confirmar o recebimento informando seu nome e CPF.</p><p><a href="${shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#c72d32;color:white;text-decoration:none">Confirmar recebimento</a></p></div>`,
       }),
     });
     if (!response.ok) notificationError = `El despacho quedó registrado, pero no se pudo enviar el aviso: ${await response.text()}`;

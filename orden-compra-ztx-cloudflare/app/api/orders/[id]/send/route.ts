@@ -34,9 +34,9 @@ export async function POST(request: Request, context: RouteContext) {
     body: JSON.stringify({
       from: FROM_EMAIL,
       to: recipients,
-      subject: `Orden de compra ${record.row.number} para revisar y firmar`,
+      subject: `Pedido de compra ${record.row.number} para análise e assinatura`,
       headers: initialEmailHeaders(messageId),
-         html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>Orden de compra ${record.row.number}</h2><p>Hola ${record.row.client_name || 'cliente'},</p><p>Enviamos la orden de compra <strong>${record.row.product || 'solicitada'}</strong> para que la revises y la firmes online.</p><p><a href="${shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Revisar y firmar orden</a></p><p>Una vez firmada, la orden quedará disponible para continuar con el seguimiento de entregas.</p></div>`,
+         html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>Pedido de compra ${record.row.number}</h2><p>Prezado(a) ${record.row.client_name || 'cliente'},</p><p>Encaminhamos o pedido de compra <strong>${record.row.product || 'solicitado'}</strong> para sua análise e assinatura digital.</p><p><a href="${shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#c72d32;color:white;text-decoration:none">Revisar e assinar pedido</a></p><p>Após a assinatura, o pedido ficará disponível para o acompanhamento das entregas.</p></div>`,
     }),
   });
   if (!response.ok) {
