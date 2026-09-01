@@ -26,19 +26,20 @@ export async function POST(request: Request, context: RouteContext) {
   if (received + quantity > record.row.total_quantity) return Response.json({ error: 'La cantidad supera los equipos pendientes.' }, { status: 400 });
   const nextNumber = record.deliveries.length + 1;
   const now = new Date().toISOString();
-  await db.prepare(`INSERT INTO deliveries (order_id, delivery_number, delivery_date, quantity, shipment, fiscal, status, notes, created_at)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`).bind(
+  await db.prepare(`INSERT INTO deliveries (order_id, delivery_number, delivery_date, quantity, received_quantity, shipment, fiscal, status, notes, created_at)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`).bind(
     id,
     nextNumber,
     body.date || now.slice(0, 10),
     quantity,
+    0,
     body.shipment || '',
     body.fiscal || '',
     'En tránsito',
     body.notes || '',
     now,
   ).run();
-  const deliveredQuantity = record.deliveries.filter((delivery) => delivery.status === 'Entregado').reduce((sum, delivery) => sum + delivery.quantity, 0);
+  const deliveredQuantity = record.deliveries.reduce((sum, delivery) => sum + (delivery.received_quantity || (delivery.status === 'Entregado' ? delivery.quantity : 0)), 0);
   const finalStatus = calculateFinalStatus('signed', record.row.total_quantity, deliveredQuantity);
   await db.prepare('UPDATE purchase_orders SET final_status = ?1, updated_at = ?2 WHERE id = ?3').bind(finalStatus, now, id).run();
   let notificationError = '';

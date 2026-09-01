@@ -16,13 +16,13 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
   const now = new Date().toISOString();
   const stage = (existing.row.status || 'draft') as OrderStage;
-  const deliveredQuantity = existing.deliveries.filter((delivery) => delivery.status === 'Entregado').reduce((sum, delivery) => sum + delivery.quantity, 0);
+  const deliveredQuantity = existing.deliveries.reduce((sum, delivery) => sum + (delivery.received_quantity || (delivery.status === 'Entregado' ? delivery.quantity : 0)), 0);
   const finalStatus = calculateFinalStatus(stage, Math.max(Number(body.totalQuantity) || 0, 0), deliveredQuantity);
   const result = await db.prepare(`UPDATE purchase_orders SET
     number = ?1, issue_date = ?2, requested_by = ?3, payment = ?4, due_date = ?5, buyer = ?6,
     product = ?7, description = ?8, unit_price = ?9, total_quantity = ?10, product_notes = ?11,
-    general_notes = ?12, client_name = ?13, client_email = ?14, final_status = ?15, updated_at = ?16
-    WHERE id = ?17`).bind(
+    general_notes = ?12, general_data_notes = ?13, client_name = ?14, client_email = ?15, final_status = ?16, updated_at = ?17
+    WHERE id = ?18`).bind(
     String(body.number ?? ''),
     String(body.issueDate ?? ''),
     String(body.requestedBy ?? ''),
@@ -35,6 +35,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     Math.max(Number(body.totalQuantity) || 0, 0),
     String(body.productNotes ?? ''),
     String(body.generalNotes ?? ''),
+    String(body.generalDataNotes ?? ''),
     String(body.clientName ?? ''),
     parseEmailList(String(body.clientEmail ?? '')).join(', '),
     finalStatus,

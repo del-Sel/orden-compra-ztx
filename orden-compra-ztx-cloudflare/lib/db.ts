@@ -18,6 +18,7 @@ export type OrderRow = {
   total_quantity: number;
   product_notes: string | null;
   general_notes: string | null;
+  general_data_notes: string | null;
   client_name: string | null;
   client_email: string;
   status: 'draft' | 'sent' | 'signed';
@@ -36,6 +37,7 @@ export type DeliveryRow = {
   delivery_number: number;
   delivery_date: string;
   quantity: number;
+  received_quantity: number;
   shipment: string | null;
   fiscal: string | null;
   status: 'Entregado' | 'Pendiente' | 'En tránsito';
@@ -63,6 +65,8 @@ export async function ensureSchema(db: D1Database) {
     'ALTER TABLE deliveries ADD COLUMN received_by_dni TEXT',
     'ALTER TABLE deliveries ADD COLUMN received_at TEXT',
     'ALTER TABLE purchase_orders ADD COLUMN email_thread_id TEXT',
+    'ALTER TABLE purchase_orders ADD COLUMN general_data_notes TEXT',
+    'ALTER TABLE deliveries ADD COLUMN received_quantity INTEGER NOT NULL DEFAULT 0',
   ];
   for (const statement of compatibilityColumns) {
     try {
@@ -71,7 +75,7 @@ export async function ensureSchema(db: D1Database) {
       if (!String(error).toLowerCase().includes('duplicate column')) throw error;
     }
   }
-  await db.prepare("UPDATE purchase_orders SET final_status = 'Cerrada' WHERE final_status = 'Entrega completa'").run();
+  await db.prepare("UPDATE deliveries SET received_quantity = quantity WHERE status = 'Entregado' AND received_quantity = 0").run();
 }
 
 export async function getOrder(db: D1Database, lookup: { id?: string; token?: string }) {
@@ -110,6 +114,7 @@ export function serializeOrder(order: Awaited<ReturnType<typeof getOrder>>) {
     totalQuantity: order.row.total_quantity,
     productNotes: order.row.product_notes ?? '',
     generalNotes: order.row.general_notes ?? '',
+    generalDataNotes: order.row.general_data_notes ?? '',
     clientName: order.row.client_name ?? '',
     clientEmail: order.row.client_email,
     status: order.row.status,
@@ -122,6 +127,7 @@ export function serializeOrder(order: Awaited<ReturnType<typeof getOrder>>) {
       deliveryNumber: delivery.delivery_number,
       date: delivery.delivery_date,
       quantity: delivery.quantity,
+      receivedQuantity: delivery.received_quantity ?? (delivery.status === 'Entregado' ? delivery.quantity : 0),
       shipment: delivery.shipment ?? '',
       fiscal: delivery.fiscal ?? '',
       status: delivery.status,

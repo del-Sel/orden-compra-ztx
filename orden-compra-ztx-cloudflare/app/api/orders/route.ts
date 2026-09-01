@@ -32,9 +32,9 @@ export async function POST(request: Request) {
 
   await db.prepare(`INSERT INTO purchase_orders (
     id, share_token, number, issue_date, requested_by, payment, due_date, buyer,
-    product, description, unit_price, total_quantity, product_notes, general_notes,
+    product, description, unit_price, total_quantity, product_notes, general_notes, general_data_notes,
     client_name, client_email, status, final_status, created_at, updated_at
-  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'draft', 'Pendiente de entrega', ?17, ?17)`).bind(
+  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 'draft', 'Pendiente de entrega', ?18, ?18)`).bind(
     id,
     shareToken,
     String(body.number ?? ''),
@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     Math.max(Number(body.totalQuantity) || 0, 0),
     String(body.productNotes ?? ''),
     String(body.generalNotes ?? ''),
+    String(body.generalDataNotes ?? ''),
     String(body.clientName ?? ''),
     clientEmail,
     now,

@@ -31,7 +31,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   const receivedAt = new Date().toISOString();
   await db.prepare(`UPDATE deliveries
-    SET status = 'Entregado', received_by_name = ?1, received_by_dni = ?2, received_at = ?3
+    SET status = 'Entregado', received_quantity = quantity, received_by_name = ?1, received_by_dni = ?2, received_at = ?3
     WHERE id = ?4 AND order_id = ?5`).bind(
     signatureName,
     signatureDni,
@@ -41,8 +41,7 @@ export async function POST(request: Request, context: RouteContext) {
   ).run();
 
   const deliveredQuantity = record.deliveries
-    .filter((item) => item.status === 'Entregado' || item.id === numericDeliveryId)
-    .reduce((sum, item) => sum + item.quantity, 0);
+    .reduce((sum, item) => sum + (item.received_quantity || (item.id === numericDeliveryId ? item.quantity : 0)), 0);
   const finalStatus = calculateFinalStatus('signed', record.row.total_quantity, deliveredQuantity);
   await db.prepare('UPDATE purchase_orders SET final_status = ?1, updated_at = ?2 WHERE id = ?3').bind(finalStatus, receivedAt, id).run();
 
@@ -58,8 +57,8 @@ export async function POST(request: Request, context: RouteContext) {
   } else {
     const internalUrl = new URL(`/?id=${encodeURIComponent(id)}`, request.url).toString();
     const threadId = record.row.email_thread_id || orderMessageId(id);
-    const closedMessage = finalStatus === 'Cerrada'
-      ? `<p>Se ha cerrado la orden de compra porque se confirmó la totalidad de las unidades.</p>`
+    const closedMessage = finalStatus === 'Entrega completa'
+      ? `<p>Se completó la entrega total de la orden. La orden queda lista para cerrar.</p>`
       : `<p>La orden continúa abierta para registrar las entregas pendientes.</p>`;
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -67,9 +66,9 @@ export async function POST(request: Request, context: RouteContext) {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: recipients,
-        subject: `Re: Orden de compra ${record.row.number} — ${finalStatus === 'Cerrada' ? 'Orden cerrada' : `Entrega ${delivery.delivery_number} confirmada`}`,
+        subject: `Re: Orden de compra ${record.row.number} — ${finalStatus === 'Entrega completa' ? 'Entrega completa' : `Entrega ${delivery.delivery_number} confirmada`}`,
         headers: replyEmailHeaders(threadId),
-        html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>${finalStatus === 'Cerrada' ? 'Orden cerrada' : 'Entrega parcial confirmada'}</h2><p>Se ha entregado la entrega parcial <strong>${delivery.delivery_number}</strong> de la orden <strong>${record.row.number}</strong>.</p><p>Cantidad recibida: <strong>${delivery.quantity}</strong> equipos.</p><p>Confirmó la recepción: <strong>${signatureName}</strong> (DNI: ${signatureDni}).</p>${closedMessage}<p><a href="${internalUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Abrir orden</a></p></div>`,
+        html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>${finalStatus === 'Entrega completa' ? 'Entrega completa' : 'Entrega parcial confirmada'}</h2><p>Se ha entregado la entrega parcial <strong>${delivery.delivery_number}</strong> de la orden <strong>${record.row.number}</strong>.</p><p>Cantidad recibida: <strong>${delivery.quantity}</strong> equipos.</p><p>Confirmó la recepción: <strong>${signatureName}</strong> (DNI: ${signatureDni}).</p>${closedMessage}<p><a href="${internalUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Abrir orden</a></p></div>`,
       }),
     });
     if (!response.ok) notificationError = `La recepción quedó registrada, pero no se pudo enviar el aviso: ${await response.text()}`;

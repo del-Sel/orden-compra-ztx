@@ -22,6 +22,7 @@ type OrderData = {
   totalQuantity: string;
   productNotes: string;
   generalNotes: string;
+  generalDataNotes: string;
   clientName: string;
   clientEmail: string;
   status?: Stage;
@@ -36,6 +37,7 @@ type Delivery = {
   deliveryNumber: number;
   date: string;
   quantity: number;
+  receivedQuantity: number;
   shipment: string;
   fiscal: string;
   status: DeliveryStatus;
@@ -77,17 +79,11 @@ const initialOrder: OrderData = {
   totalQuantity: "",
   productNotes: "",
   generalNotes: "",
+  generalDataNotes: "",
   clientName: "",
   clientEmail: "",
   finalStatus: "Pendiente de entrega",
 };
-
-const stages = [
-  { label: "Armar orden", step: "1" },
-  { label: "Enviar al cliente", step: "2" },
-  { label: "Cliente firma", step: "3" },
-  { label: "Registrar entregas", step: "4" },
-];
 
 function normalizeOrder(
   order: OrderData & {
@@ -99,6 +95,7 @@ function normalizeOrder(
     ...order,
     totalQuantity: String(order.totalQuantity),
     clientEmail: order.clientEmail || "",
+    generalDataNotes: order.generalDataNotes || "",
   };
 }
 
@@ -157,8 +154,9 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function stageIndex(stage: Stage) {
-  return stage === "signed" ? 3 : stage === "sent" ? 2 : 0;
+function receivedQuantityFor(delivery: Delivery) {
+  return delivery.receivedQuantity ||
+    (delivery.status === "Entregado" ? delivery.quantity : 0);
 }
 
 function automaticFinalStatus(
@@ -170,15 +168,17 @@ function automaticFinalStatus(
   const normalizedSavedStatus = normalizeFinalStatus(savedStatus);
   if (normalizedSavedStatus === "Cancelada") return normalizedSavedStatus;
   if (normalizedSavedStatus === "Cerrada") return normalizedSavedStatus;
-  const deliveredQuantity = deliveries
-    .filter((delivery) => delivery.status === "Entregado")
-    .reduce((sum, delivery) => sum + delivery.quantity, 0);
+  const deliveredQuantity = deliveries.reduce(
+    (sum, delivery) => sum + receivedQuantityFor(delivery),
+    0,
+  );
   return calculateFinalStatus(stage, totalQuantity, deliveredQuantity);
 }
 
 function historyStatusLabel(order: OrderSummary) {
   const finalStatus = normalizeFinalStatus(order.finalStatus);
-  if (finalStatus === "Cancelada" || finalStatus === "Cerrada") return finalStatus;
+  if (["Cancelada", "Cerrada", "Entrega completa"].includes(finalStatus))
+    return finalStatus;
   if (order.status === "draft") return "Borrador";
   if (order.status === "sent") return "Esperando firma";
   return finalStatus;
@@ -188,6 +188,7 @@ function historyStatusClass(order: OrderSummary) {
   const finalStatus = normalizeFinalStatus(order.finalStatus);
   if (finalStatus === "Cancelada") return "status-cancelled";
   if (finalStatus === "Cerrada") return "status-complete";
+  if (finalStatus === "Entrega completa") return "status-complete";
   if (order.status === "draft") return "status-draft";
   if (order.status === "sent") return "status-sent";
   if (finalStatus === "Entrega parcial") return "status-partial";
@@ -196,7 +197,7 @@ function historyStatusClass(order: OrderSummary) {
 
 function finalStatusClass(status: string) {
   if (status === "Cancelada") return "status-cancelled";
-  if (status === "Cerrada") return "status-complete";
+  if (status === "Cerrada" || status === "Entrega completa") return "status-complete";
   if (status === "Entrega parcial") return "status-partial";
   return "status-pending";
 }
@@ -247,13 +248,12 @@ export default function OrderWorkspace({
   );
   const receivedQuantity = useMemo(
     () =>
-      deliveries
-        .filter((delivery) => delivery.status === "Entregado")
-        .reduce((sum, delivery) => sum + delivery.quantity, 0),
+      deliveries.reduce((sum, delivery) => sum + receivedQuantityFor(delivery), 0),
     [deliveries],
   );
   const inTransitQuantity = Math.max(sentQuantity - receivedQuantity, 0);
   const pendingQuantity = Math.max(totalQuantity - sentQuantity, 0);
+  const pendingReceiptQuantity = Math.max(totalQuantity - receivedQuantity, 0);
   const progress = totalQuantity
     ? Math.min(Math.round((receivedQuantity / totalQuantity) * 100), 100)
     : 0;
@@ -265,10 +265,10 @@ export default function OrderWorkspace({
     order.finalStatus,
   );
   const isClosed = currentFinalStatus === "Cerrada";
+  const isComplete = currentFinalStatus === "Entrega completa";
   const isCancelled = currentFinalStatus === "Cancelada";
   const canEdit =
     view === "interno" && stage === "draft" && !isClosed && !isCancelled;
-  const activeStage = stageIndex(stage);
 
   function applyLoadedOrder(payload: ApiPayload) {
     if (!payload.order) return;
@@ -542,6 +542,40 @@ export default function OrderWorkspace({
     }
   }
 
+  async function handleCloseOrder() {
+    if (!orderId || !isComplete) return;
+    if (!window.confirm("¿Querés cerrar esta orden? Va a quedar finalizada en el historial."))
+      return;
+
+    setBusy("close");
+    try {
+      const response = await fetch(`/api/orders/${orderId}/close`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as ApiPayload;
+      if (!response.ok || !payload.order)
+        throw new Error(payload.error || "No pudimos cerrar la orden.");
+      const closed = normalizeOrder(payload.order);
+      setOrder(closed);
+      setDeliveries(payload.order.deliveries ?? []);
+      try {
+        await refreshHistory();
+      } catch {
+        /* El cierre ya se guardó aunque el historial tarde en actualizarse. */
+      }
+      if (payload.warning) showToast(`Orden cerrada. ${payload.warning}`);
+      else showToast("Orden cerrada.");
+    } catch (closeError) {
+      showToast(
+        closeError instanceof Error
+          ? closeError.message
+          : "No pudimos cerrar la orden.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function saveOrder() {
     const response = await fetch(
       orderId ? `/api/orders/${orderId}` : "/api/orders",
@@ -789,12 +823,9 @@ export default function OrderWorkspace({
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <img src="/logo-ful-mar.png" alt="Ful-Mar" className="brand-logo" />
+          <img src="/logo-ful-mar-wordmark.jpg" alt="Ful-Mar" className="brand-logo" />
           <div>
             <strong>Órdenes de compra</strong>
-            <small>
-              {view === "interno" ? "Gestión interna" : "Revisión del cliente"}
-            </small>
           </div>
         </div>
         <div className="topbar-right">
@@ -833,17 +864,17 @@ export default function OrderWorkspace({
           className={`hero-banner ${view === "cliente" ? "hero-banner-client" : ""}`}
         >
           <div className="hero-logo-wrap">
-            <img src="/logo-ful-mar.png" alt="Ful-Mar" />
+            <img src="/logo-ful-mar-tagline.jpg" alt="Ful-Mar" />
           </div>
           <div className="hero-copy">
             <span>
               {view === "interno"
-                ? "FUL-MAR · Gestión de órdenes"
-                : "FUL-MAR · Orden recibida"}
+                ? "Gestión de compras"
+                : "Revisión y firma"}
             </span>
             <h2>
               {view === "interno"
-                ? "Gestión de órdenes de compra"
+                ? "Orden de compra"
                 : isSigned
                   ? "Confirmación de entregas parciales"
                   : "Revisá y firmá la orden de compra"}
@@ -930,12 +961,14 @@ export default function OrderWorkspace({
                 <div className="flow-intro">
                   <span className="flow-label">Estado de la orden</span>
                   <span
-                    className={`top-status ${isCancelled ? "is-cancelled" : isClosed ? "is-closed" : stage === "signed" ? "is-signed" : stage === "sent" ? "is-sent" : ""}`}
+                    className={`top-status ${isCancelled ? "is-cancelled" : isClosed || isComplete ? "is-closed" : stage === "signed" ? "is-signed" : stage === "sent" ? "is-sent" : ""}`}
                   >
                     {isCancelled
                       ? "Cancelada"
                       : isClosed
                         ? "Cerrada"
+                        : isComplete
+                          ? "Entrega completa"
                         : stage === "signed"
                       ? "Firmada"
                       : stage === "sent"
@@ -943,25 +976,10 @@ export default function OrderWorkspace({
                         : "Borrador"}
                   </span>
                 </div>
-                <div className="flow-steps">
-                  {stages.map((item, index) => (
-                    <div
-                      className={`flow-step ${index < activeStage ? "completed" : ""} ${index === activeStage ? "current" : ""}`}
-                      key={item.label}
-                    >
-                      <span className="flow-number">
-                        {index < activeStage ? "✓" : item.step}
-                      </span>
-                      <div>
-                        <small>Paso {item.step}</small>
-                        <strong>{item.label}</strong>
-                      </div>
-                      {index < stages.length - 1 && (
-                        <i className={index < activeStage ? "completed" : ""} />
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <p className="flow-description">
+                  El estado se actualiza automáticamente con la firma y las
+                  entregas confirmadas.
+                </p>
               </section>
             )}
             {view === "interno" && stage === "sent" && (
@@ -1035,19 +1053,21 @@ export default function OrderWorkspace({
                 </div>
                 <div className="sheet-header-actions">
                   <span
-                    className={`sheet-status ${isCancelled || isClosed ? finalStatusClass(currentFinalStatus) : isSigned ? "status-complete" : stage === "sent" ? "status-sent" : "status-draft"}`}
+                    className={`sheet-status ${isCancelled || isClosed || isComplete ? finalStatusClass(currentFinalStatus) : isSigned ? "status-complete" : stage === "sent" ? "status-sent" : "status-draft"}`}
                   >
                     {isCancelled
                       ? "Cancelada"
                       : isClosed
                         ? "Cerrada"
-                        : isSigned
-                    ? "Firmada"
-                    : stage === "sent"
-                      ? "Esperando firma"
-                      : "Borrador"}
+                        : isComplete
+                          ? "Entrega completa"
+                          : isSigned
+                            ? "Firmada"
+                            : stage === "sent"
+                              ? "Esperando firma"
+                              : "Borrador"}
                   </span>
-                  {view === "interno" && orderId && !isClosed && !isCancelled && (
+                  {view === "interno" && orderId && !isClosed && !isCancelled && !isComplete && (
                     <button
                       type="button"
                       className="button button-danger"
@@ -1155,6 +1175,23 @@ export default function OrderWorkspace({
                     )}
                   </label>
                 </div>
+                <label className="field general-data-notes">
+                  <span>Observaciones</span>
+                  {canEdit ? (
+                    <textarea
+                      value={order.generalDataNotes}
+                      onChange={(event) =>
+                        updateOrder("generalDataNotes", event.target.value)
+                      }
+                      rows={3}
+                      placeholder="Condiciones o aclaraciones de la orden"
+                    />
+                  ) : (
+                    <p className="readonly-note">
+                      {order.generalDataNotes || "—"}
+                    </p>
+                  )}
+                </label>
               </div>
               <div className="sheet-section">
                 <div className="section-heading">
@@ -1479,18 +1516,21 @@ export default function OrderWorkspace({
                                 )}
                               </span>
                               <strong>
-                                {delivery.quantity.toLocaleString("es-AR")}{" "}
-                                equipos
+                                {delivery.status === "Entregado"
+                                  ? String(receivedQuantityFor(delivery).toLocaleString("es-AR")) + " equipos recibidos"
+                                  : String(delivery.quantity.toLocaleString("es-AR")) + " equipos enviados"}
                               </strong>
                               <small>
-                                {formatDate(delivery.date)}
+                                {delivery.status === "Entregado" && delivery.receivedAt
+                                  ? "Entregado el " + formatDate(delivery.receivedAt.slice(0, 10))
+                                  : "Despachado el " + formatDate(delivery.date)}
                                 {delivery.shipment
-                                  ? ` · ${delivery.shipment}`
+                                  ? " · " + delivery.shipment
                                   : ""}
                               </small>
                             </div>
                             <span
-                              className={`delivery-status ${delivery.status === "Entregado" ? "delivered" : "transit"}`}
+                              className={`delivery-status ${delivery.status === "Entregado" ? "delivered" : delivery.status === "Pendiente" ? "pending" : "transit"}`}
                             >
                               <i />
                               {delivery.status}
@@ -1590,7 +1630,7 @@ export default function OrderWorkspace({
               )}
               {view === "interno" && (
                 <>
-                  {!isSigned || isCancelled ? (
+                  {!isSigned || isCancelled || isClosed ? (
                     <div className="locked-section">
                       <div className="lock-icon">⌁</div>
                       <div>
@@ -1598,10 +1638,14 @@ export default function OrderWorkspace({
                         <p>
                           {isCancelled
                             ? "La orden fue cancelada y no admite nuevas entregas."
-                            : "Se habilita una vez que el cliente firme la orden."}
+                            : isClosed
+                              ? "La orden está cerrada y no admite nuevas entregas."
+                              : "Se habilita una vez que el cliente firme la orden."}
                         </p>
                       </div>
-                      <span>{isCancelled ? "Cancelada" : "Bloqueado"}</span>
+                      <span>
+                        {isCancelled ? "Cancelada" : isClosed ? "Cerrada" : "Bloqueado"}
+                      </span>
                     </div>
                   ) : (
                     <div className="sheet-section deliveries-section">
@@ -1636,8 +1680,8 @@ export default function OrderWorkspace({
                           </strong>
                           <p>
                             {inTransitQuantity.toLocaleString("es-AR")} en
-                            tránsito · {pendingQuantity.toLocaleString("es-AR")}{" "}
-                            pendientes de envío
+                            tránsito · {pendingQuantity.toLocaleString("es-AR")} pendientes
+                            de envío · {pendingReceiptQuantity.toLocaleString("es-AR")} por recibir
                           </p>
                         </div>
                         <strong className="progress-label">{progress}%</strong>
@@ -1700,7 +1744,7 @@ export default function OrderWorkspace({
                               />
                             </label>
                             <label className="field">
-                              <span>Nota fiscal Nro.</span>
+                              <span>Nota Fiscal Nro.</span>
                               <input
                                 value={newDelivery.fiscal}
                                 onChange={(event) =>
@@ -1722,7 +1766,7 @@ export default function OrderWorkspace({
                             </div>
                             <label className="field">
                               <span>Observaciones</span>
-                              <input
+                              <textarea
                                 value={newDelivery.notes}
                                 onChange={(event) =>
                                   setNewDelivery((current) => ({
@@ -1730,6 +1774,7 @@ export default function OrderWorkspace({
                                     notes: event.target.value,
                                   }))
                                 }
+                                rows={2}
                                 placeholder="Información adicional"
                               />
                             </label>
@@ -1764,11 +1809,11 @@ export default function OrderWorkspace({
                           <thead>
                             <tr>
                               <th>Entrega N.º</th>
-                              <th>Fecha de despacho</th>
-                              <th>Cantidad enviada</th>
+                              <th>Fecha de entrega</th>
+                              <th>Cantidad recibida</th>
                               <th>Cantidad pendiente</th>
                               <th>N.º de despacho/envío</th>
-                              <th>Nota fiscal Nro.</th>
+                              <th>Nota Fiscal Nro.</th>
                               <th>Estado</th>
                               <th>Observaciones</th>
                             </tr>
@@ -1783,10 +1828,14 @@ export default function OrderWorkspace({
                                     ).padStart(2, "0")}
                                   </span>
                                 </td>
-                                <td>{formatDate(delivery.date)}</td>
+                                <td>
+                                  {delivery.receivedAt
+                                    ? formatDate(delivery.receivedAt.slice(0, 10))
+                                    : "Pendiente"}
+                                </td>
                                 <td>
                                   <strong>
-                                    {delivery.quantity.toLocaleString("es-AR")}{" "}
+                                    {receivedQuantityFor(delivery).toLocaleString("es-AR")}{" "}
                                     u.
                                   </strong>
                                 </td>
@@ -1797,7 +1846,7 @@ export default function OrderWorkspace({
                                         .slice(0, index + 1)
                                         .reduce(
                                           (sum, current) =>
-                                            sum + current.quantity,
+                                            sum + receivedQuantityFor(current),
                                           0,
                                         ),
                                     0,
@@ -1849,17 +1898,31 @@ export default function OrderWorkspace({
                             </p>
                           </div>
                         </div>
-                        <span
-                          className={`sheet-status ${finalStatusClass(currentFinalStatus)}`}
-                        >
-                          {currentFinalStatus}
-                        </span>
+                        <div className="final-status-actions">
+                          <span
+                            className={`sheet-status ${finalStatusClass(currentFinalStatus)}`}
+                          >
+                            {currentFinalStatus}
+                          </span>
+                          {isComplete && (
+                            <button
+                              type="button"
+                              className="button button-primary"
+                              onClick={handleCloseOrder}
+                              disabled={busy === "close"}
+                            >
+                              {busy === "close" ? "Cerrando..." : "Cerrar orden"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="automatic-status">
                         <span>✓</span>
                         <p>
                           {currentFinalStatus === "Cerrada"
                             ? "La cantidad total de la orden ya fue recibida y la orden quedó cerrada."
+                            : currentFinalStatus === "Entrega completa"
+                              ? "La totalidad de las unidades ya fue recibida. Podés cerrar la orden cuando termines la gestión."
                             : currentFinalStatus === "Entrega parcial"
                               ? "Ya se confirmaron entregas, pero todavía queda cantidad pendiente."
                               : currentFinalStatus === "Cancelada"

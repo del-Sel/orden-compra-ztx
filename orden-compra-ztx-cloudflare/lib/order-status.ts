@@ -1,9 +1,9 @@
 export type OrderStage = 'draft' | 'sent' | 'signed';
-export type FinalStatus = 'Pendiente de entrega' | 'Entrega parcial' | 'Cerrada' | 'Cancelada';
+export type FinalStatus = 'Pendiente de entrega' | 'Entrega parcial' | 'Entrega completa' | 'Cerrada' | 'Cancelada';
 
 export function normalizeFinalStatus(value: string | null | undefined): FinalStatus {
-  if (value === 'Entrega completa') return 'Cerrada';
   if (value === 'Entrega parcial') return 'Entrega parcial';
+  if (value === 'Entrega completa') return 'Entrega completa';
   if (value === 'Cerrada') return 'Cerrada';
   if (value === 'Cancelada') return 'Cancelada';
   return 'Pendiente de entrega';
@@ -17,6 +17,6 @@ export function isTerminalFinalStatus(value: string | null | undefined) {
 export function calculateFinalStatus(stage: OrderStage, totalQuantity: number, deliveredQuantity: number): FinalStatus {
   if (stage !== 'signed' || deliveredQuantity <= 0) return 'Pendiente de entrega';
   return totalQuantity > 0 && deliveredQuantity >= totalQuantity
-    ? 'Cerrada'
+    ? 'Entrega completa'
     : 'Entrega parcial';
 }
