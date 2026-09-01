@@ -27,6 +27,7 @@ export type OrderRow = {
   signature_dni: string | null;
   signed_at: string | null;
   email_thread_id: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -50,7 +51,7 @@ export type DeliveryRow = {
 
 export type OrderSummaryRow = Pick<
   OrderRow,
-  'id' | 'number' | 'product' | 'client_name' | 'status' | 'final_status' | 'total_quantity' | 'updated_at'
+  'id' | 'number' | 'product' | 'client_name' | 'status' | 'final_status' | 'total_quantity' | 'updated_at' | 'archived_at'
 >;
 
 export function getDb() {
@@ -82,6 +83,7 @@ export async function ensureSchema(db: D1Database) {
     'ALTER TABLE deliveries ADD COLUMN received_at TEXT',
     'ALTER TABLE purchase_orders ADD COLUMN email_thread_id TEXT',
     'ALTER TABLE purchase_orders ADD COLUMN general_data_notes TEXT',
+    'ALTER TABLE purchase_orders ADD COLUMN archived_at TEXT',
     'ALTER TABLE deliveries ADD COLUMN received_quantity INTEGER NOT NULL DEFAULT 0',
   ];
   for (const statement of compatibilityColumns) {
@@ -102,7 +104,26 @@ export async function ensureSchema(db: D1Database) {
       ), 0) + 1
     FROM purchase_orders
   `).run();
+  await purgeExpiredArchivedOrders(db);
   await db.prepare("UPDATE deliveries SET received_quantity = quantity WHERE status = 'Entregado' AND received_quantity = 0").run();
+}
+
+export async function purgeExpiredArchivedOrders(db: D1Database) {
+  await db.batch([
+    db.prepare(`
+      DELETE FROM deliveries
+      WHERE order_id IN (
+        SELECT id FROM purchase_orders
+        WHERE archived_at IS NOT NULL
+          AND julianday(archived_at) <= julianday('now', '-24 hours')
+      )
+    `),
+    db.prepare(`
+      DELETE FROM purchase_orders
+      WHERE archived_at IS NOT NULL
+        AND julianday(archived_at) <= julianday('now', '-24 hours')
+    `),
+  ]);
 }
 
 export async function getOrder(db: D1Database, lookup: { id?: string; token?: string }) {
@@ -114,10 +135,15 @@ export async function getOrder(db: D1Database, lookup: { id?: string; token?: st
   return { row, deliveries: deliveries.results };
 }
 
-export async function getOrderSummaries(db: D1Database, limit = 50) {
+export async function getOrderSummaries(
+  db: D1Database,
+  limit = 50,
+  archived = false,
+) {
   const result = await db.prepare(`
-    SELECT id, number, product, client_name, status, final_status, total_quantity, updated_at
+    SELECT id, number, product, client_name, status, final_status, total_quantity, updated_at, archived_at
     FROM purchase_orders
+    WHERE archived_at IS ${archived ? 'NOT ' : ''}NULL
     ORDER BY updated_at DESC
     LIMIT ?1
   `).bind(Math.min(Math.max(limit, 1), 100)).all<OrderSummaryRow>();
@@ -149,6 +175,7 @@ export function serializeOrder(order: Awaited<ReturnType<typeof getOrder>>) {
     signatureName: order.row.signature_name,
     signatureDni: order.row.signature_dni,
     signedAt: order.row.signed_at,
+    archivedAt: order.row.archived_at,
     deliveries: order.deliveries.map((delivery) => ({
       id: delivery.id,
       deliveryNumber: delivery.delivery_number,
@@ -176,5 +203,6 @@ export function serializeOrderSummary(row: OrderSummaryRow) {
     finalStatus: row.final_status,
     totalQuantity: row.total_quantity,
     updatedAt: row.updated_at,
+    archivedAt: row.archived_at,
   };
 }

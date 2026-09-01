@@ -23,6 +23,7 @@ export const schemaStatements = [
     signature_dni TEXT,
     signed_at TEXT,
     email_thread_id TEXT,
+    archived_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,

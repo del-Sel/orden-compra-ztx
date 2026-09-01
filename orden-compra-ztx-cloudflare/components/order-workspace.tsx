@@ -30,6 +30,7 @@ type OrderData = {
   signatureName?: string | null;
   signatureDni?: string | null;
   signedAt?: string | null;
+  archivedAt?: string | null;
 };
 
 type Delivery = {
@@ -56,6 +57,7 @@ type OrderSummary = {
   finalStatus: string;
   totalQuantity: number;
   updatedAt: string;
+  archivedAt?: string | null;
 };
 
 type ApiPayload = {
@@ -265,6 +267,8 @@ export default function OrderWorkspace({
   const [deliverySignatureDni, setDeliverySignatureDni] = useState("");
   const [recipientDraft, setRecipientDraft] = useState("");
   const [history, setHistory] = useState<OrderSummary[]>([]);
+  const [archivedHistory, setArchivedHistory] = useState<OrderSummary[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(
     initialMode === "interno",
   );
@@ -303,8 +307,13 @@ export default function OrderWorkspace({
   const isClosed = currentFinalStatus === "Cerrada";
   const isComplete = currentFinalStatus === "Entrega completa";
   const isCancelled = currentFinalStatus === "Cancelada";
+  const isArchived = Boolean(order.archivedAt);
   const canEdit =
-    view === "interno" && stage === "draft" && !isClosed && !isCancelled;
+    view === "interno" &&
+    stage === "draft" &&
+    !isClosed &&
+    !isCancelled &&
+    !isArchived;
 
   function applyLoadedOrder(payload: ApiPayload) {
     if (!payload.order) return;
@@ -322,15 +331,39 @@ export default function OrderWorkspace({
     setRecipientDraft("");
   }
 
-  async function refreshHistory() {
+  async function refreshHistory(archived = false) {
     if (initialMode !== "interno" || token) return;
-    const response = await fetch("/api/orders?history=1", {
+    const response = await fetch(
+      `/api/orders?history=1${archived ? "&archived=1" : ""}`,
+      {
       cache: "no-store",
-    });
+      },
+    );
     const payload = (await response.json()) as ApiPayload;
     if (!response.ok)
       throw new Error(payload.error || "No pudimos cargar el historial.");
-    setHistory(payload.orders ?? []);
+    if (archived) setArchivedHistory(payload.orders ?? []);
+    else setHistory(payload.orders ?? []);
+  }
+
+  async function handleToggleArchived() {
+    if (showArchived) {
+      setShowArchived(false);
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      await refreshHistory(true);
+      setShowArchived(true);
+    } catch (archiveError) {
+      showToast(
+        archiveError instanceof Error
+          ? archiveError.message
+          : "No fue posible cargar las órdenes archivadas.",
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -465,6 +498,7 @@ export default function OrderWorkspace({
     setDeliverySignatureDni("");
     setRecipientDraft("");
     setIsAddingDelivery(false);
+    setShowArchived(false);
     setError("");
     setToast("");
     window.history.replaceState({}, "", "/");
@@ -498,21 +532,21 @@ export default function OrderWorkspace({
     }
   }
 
-  async function handleDeleteOrder(item: OrderSummary) {
+  async function handleArchiveOrder(item: OrderSummary) {
     const label = item.number || item.product || "esta orden";
     if (
       !window.confirm(
-        `¿Desea eliminar ${label}? También se eliminarán sus entregas y firmas. Esta acción no se puede deshacer.`,
+        `¿Desea archivar ${label}? La orden permanecerá disponible durante 24 horas.`,
       )
     )
       return;
 
-    setBusy(`delete-${item.id}`);
+    setBusy(`archive-${item.id}`);
     try {
       const response = await fetch(`/api/orders/${item.id}`, { method: "DELETE" });
       const payload = (await response.json()) as ApiPayload;
       if (!response.ok)
-        throw new Error(payload.error || "No pudimos eliminar la orden.");
+        throw new Error(payload.error || "No fue posible archivar la orden.");
 
       setHistory((current) => current.filter((entry) => entry.id !== item.id));
       if (item.id === orderId) {
@@ -527,14 +561,41 @@ export default function OrderWorkspace({
         setSignatureAccepted(false);
         setRecipientDraft("");
         setIsAddingDelivery(false);
+        setShowArchived(false);
         window.history.replaceState({}, "", "/");
       }
-      showToast("Orden eliminada.");
-    } catch (deleteError) {
+      showToast("Orden archivada durante 24 horas.");
+    } catch (archiveError) {
       showToast(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "No pudimos eliminar la orden.",
+        archiveError instanceof Error
+          ? archiveError.message
+          : "No fue posible archivar la orden.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleRestoreOrder(id: string) {
+    setBusy(`restore-${id}`);
+    try {
+      const response = await fetch(`/api/orders/${id}/restore`, { method: "POST" });
+      const payload = (await response.json()) as ApiPayload;
+      if (!response.ok || !payload.order)
+        throw new Error(payload.error || "No fue posible restaurar la orden.");
+
+      setArchivedHistory((current) => current.filter((entry) => entry.id !== id));
+      await refreshHistory();
+      if (id === orderId) {
+        applyLoadedOrder(payload);
+        setShowArchived(false);
+      }
+      showToast("Orden restaurada.");
+    } catch (restoreError) {
+      showToast(
+        restoreError instanceof Error
+          ? restoreError.message
+          : "No fue posible restaurar la orden.",
       );
     } finally {
       setBusy("");
@@ -934,26 +995,44 @@ export default function OrderWorkspace({
             <aside className="history-panel">
               <div className="history-heading">
                 <div>
-                  <h2>Historial de órdenes</h2>
+                  <h2>{showArchived ? "Órdenes archivadas" : "Historial de órdenes"}</h2>
                 </div>
-                <button
-                  type="button"
-                  className="history-new-button"
-                  onClick={handleNewOrder}
-                >
-                  ＋ Nueva
-                </button>
+                <div className="history-actions">
+                  <button
+                    type="button"
+                    className="history-archive-button"
+                    onClick={handleToggleArchived}
+                    disabled={historyLoading}
+                  >
+                    {showArchived ? "Activas" : "Archivadas"}
+                  </button>
+                  <button
+                    type="button"
+                    className="history-new-button"
+                    onClick={handleNewOrder}
+                  >
+                    ＋ Nueva
+                  </button>
+                </div>
               </div>
               {historyLoading ? (
                 <div className="history-empty">Cargando órdenes...</div>
-              ) : history.length === 0 ? (
+              ) : (showArchived ? archivedHistory : history).length === 0 ? (
                 <div className="history-empty">
-                  <strong>No hay órdenes registradas</strong>
-                  <span>Las órdenes registradas aparecerán aquí.</span>
+                  <strong>
+                    {showArchived
+                      ? "No hay órdenes archivadas"
+                      : "No hay órdenes registradas"}
+                  </strong>
+                  <span>
+                    {showArchived
+                      ? "Las órdenes archivadas se conservan durante 24 horas."
+                      : "Las órdenes registradas aparecerán aquí."}
+                  </span>
                 </div>
               ) : (
                 <div className="history-list">
-                  {history.map((item) => (
+                  {(showArchived ? archivedHistory : history).map((item) => (
                     <div className="history-item-row" key={item.id}>
                       <button
                         type="button"
@@ -964,9 +1043,9 @@ export default function OrderWorkspace({
                         <span className="history-item-top">
                           <strong>{item.number || "Sin número"}</strong>
                           <span
-                            className={`history-status ${historyStatusClass(item)}`}
+                            className={`history-status ${showArchived ? "status-archived" : historyStatusClass(item)}`}
                           >
-                            {historyStatusLabel(item)}
+                            {showArchived ? "Archivada" : historyStatusLabel(item)}
                           </span>
                         </span>
                         <span className="history-product">
@@ -974,18 +1053,24 @@ export default function OrderWorkspace({
                         </span>
                         <span className="history-meta">
                           {item.clientName || "Cliente sin nombre"} ·{" "}
-                          {formatUpdatedAt(item.updatedAt)}
+                          {showArchived && item.archivedAt
+                            ? `Archivada ${formatUpdatedAt(item.archivedAt)}`
+                            : formatUpdatedAt(item.updatedAt)}
                         </span>
                       </button>
                       <button
                         type="button"
-                        className="history-delete-button"
-                        onClick={() => handleDeleteOrder(item)}
+                        className={`history-delete-button ${showArchived ? "history-restore-button" : ""}`}
+                        onClick={() =>
+                          showArchived
+                            ? handleRestoreOrder(item.id)
+                            : handleArchiveOrder(item)
+                        }
                         disabled={Boolean(busy)}
-                        aria-label={`Eliminar ${item.number || "esta orden"}`}
-                        title="Eliminar orden"
+                        aria-label={`${showArchived ? "Restaurar" : "Archivar"} ${item.number || "esta orden"}`}
+                        title={showArchived ? "Restaurar orden" : "Archivar orden"}
                       >
-                        ×
+                        {showArchived ? "↺" : "×"}
                       </button>
                     </div>
                   ))}
@@ -999,9 +1084,11 @@ export default function OrderWorkspace({
                 <div className="flow-intro">
                   <span className="flow-label">Estado de la orden</span>
                   <span
-                    className={`top-status ${isCancelled ? "is-cancelled" : isClosed || isComplete ? "is-closed" : stage === "signed" ? "is-signed" : stage === "sent" ? "is-sent" : ""}`}
+                    className={`top-status ${isArchived ? "is-archived" : isCancelled ? "is-cancelled" : isClosed || isComplete ? "is-closed" : stage === "signed" ? "is-signed" : stage === "sent" ? "is-sent" : ""}`}
                   >
-                    {isCancelled
+                    {isArchived
+                      ? "Archivada"
+                      : isCancelled
                       ? "Cancelada"
                       : isClosed
                         ? "Cerrada"
@@ -1043,12 +1130,16 @@ export default function OrderWorkspace({
                 <div className="client-badge">✓</div>
                 <div>
                  <strong>
-                   {isSigned
+                   {isArchived
+                      ? "Pedido arquivado"
+                      : isSigned
                       ? "Pedido confirmado"
                       : "Pedido enviado para análise"}
                  </strong>
                  <span>
-                   {isSigned
+                   {isArchived
+                      ? "Este pedido está arquivado."
+                      : isSigned
                       ? "É possível confirmar cada entrega recebida."
                       : "A assinatura requer nome completo e CPF."}
                  </span>
@@ -1087,9 +1178,13 @@ export default function OrderWorkspace({
                 </div>
                 <div className="sheet-header-actions">
                   <span
-                    className={`sheet-status ${isCancelled || isClosed || isComplete ? finalStatusClass(currentFinalStatus) : isSigned ? "status-complete" : stage === "sent" ? "status-sent" : "status-draft"}`}
+                    className={`sheet-status ${isArchived ? "status-archived" : isCancelled || isClosed || isComplete ? finalStatusClass(currentFinalStatus) : isSigned ? "status-complete" : stage === "sent" ? "status-sent" : "status-draft"}`}
                   >
-                    {view === "cliente"
+                    {isArchived
+                      ? view === "cliente"
+                        ? "Arquivado"
+                        : "Archivada"
+                      : view === "cliente"
                       ? clientFinalStatusLabel(
                           isCancelled
                             ? "Cancelada"
@@ -1115,7 +1210,19 @@ export default function OrderWorkspace({
                                 ? "Esperando firma"
                                 : "Borrador"}
                   </span>
-                  {view === "interno" && orderId && !isClosed && !isCancelled && !isComplete && (
+                  {view === "interno" && orderId && isArchived && (
+                    <button
+                      type="button"
+                      className="button button-light"
+                      onClick={() => handleRestoreOrder(orderId)}
+                      disabled={busy === `restore-${orderId}`}
+                    >
+                      {busy === `restore-${orderId}`
+                        ? "Restaurando..."
+                        : "Restaurar orden"}
+                    </button>
+                  )}
+                  {view === "interno" && orderId && !isArchived && !isClosed && !isCancelled && !isComplete && (
                     <button
                       type="button"
                       className="button button-danger"
@@ -1477,16 +1584,26 @@ export default function OrderWorkspace({
                       </div>
                     </div>
                     <span
-                      className={`signature-state ${isCancelled ? "cancelled" : isSigned ? "signed" : ""}`}
+                      className={`signature-state ${isArchived ? "archived" : isCancelled ? "cancelled" : isSigned ? "signed" : ""}`}
                     >
-                      {isCancelled
+                      {isArchived
+                        ? "Arquivado"
+                        : isCancelled
                         ? "Cancelado"
                         : isSigned
                           ? "✓ Assinado"
                           : "Pendente"}
                     </span>
                   </div>
-                  {isCancelled ? (
+                  {isArchived ? (
+                    <div className="signed-confirmation cancelled-confirmation">
+                      <span>!</span>
+                      <div>
+                        <strong>Pedido arquivado</strong>
+                        <p>Este pedido está arquivado e não permite novas ações.</p>
+                      </div>
+                    </div>
+                  ) : isCancelled ? (
                     <div className="signed-confirmation cancelled-confirmation">
                       <span>!</span>
                       <div>
@@ -1568,7 +1685,7 @@ export default function OrderWorkspace({
                   )}
                 </div>
               )}
-              {view === "cliente" && isSigned && !isCancelled && (
+              {view === "cliente" && isSigned && !isCancelled && !isArchived && (
                 <div className="sheet-section client-deliveries-section">
                   <div className="section-heading">
                     <div>

@@ -11,6 +11,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   await ensureSchema(db);
   const existing = await getOrder(db, { id });
   if (!existing) return Response.json({ error: 'No encontramos esta orden.' }, { status: 404 });
+  if (existing.row.archived_at) {
+    return Response.json({ error: 'La orden está archivada y debe restaurarse antes de editarse.' }, { status: 409 });
+  }
   if (isTerminalFinalStatus(existing.row.final_status)) {
     return Response.json({ error: 'Esta orden ya está cerrada o cancelada y no puede editarse.' }, { status: 409 });
   }
@@ -52,11 +55,14 @@ export async function DELETE(_request: Request, context: RouteContext) {
   await ensureSchema(db);
   const existing = await getOrder(db, { id });
   if (!existing) return Response.json({ error: "No encontramos esta orden." }, { status: 404 });
+  if (existing.row.archived_at) {
+    return Response.json({ error: "La orden ya está archivada." }, { status: 409 });
+  }
 
-  await db.batch([
-    db.prepare("DELETE FROM deliveries WHERE order_id = ?1").bind(id),
-    db.prepare("DELETE FROM purchase_orders WHERE id = ?1").bind(id),
-  ]);
+  const archivedAt = new Date().toISOString();
+  await db.prepare(
+    "UPDATE purchase_orders SET archived_at = ?1, updated_at = ?1 WHERE id = ?2",
+  ).bind(archivedAt, id).run();
 
   return Response.json({ ok: true, id });
 }

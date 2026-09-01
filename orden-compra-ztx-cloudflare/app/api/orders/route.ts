@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   if (history === '1') {
     const db = getDb();
     await ensureSchema(db);
-    const orders = await getOrderSummaries(db);
+    const orders = await getOrderSummaries(db, 50, url.searchParams.get('archived') === '1');
     return Response.json({ orders: orders.map(serializeOrderSummary) });
   }
   const id = url.searchParams.get('id') ?? undefined;

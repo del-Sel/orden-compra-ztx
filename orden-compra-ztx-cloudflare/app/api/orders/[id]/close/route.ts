@@ -13,6 +13,9 @@ export async function POST(request: Request, context: RouteContext) {
   await ensureSchema(db);
   const record = await getOrder(db, { id });
   if (!record) return Response.json({ error: 'No encontramos esta orden.' }, { status: 404 });
+  if (record.row.archived_at) {
+    return Response.json({ error: 'La orden está archivada y debe restaurarse antes de modificarla.' }, { status: 409 });
+  }
 
   const currentStatus = normalizeFinalStatus(record.row.final_status);
   if (currentStatus === 'Cerrada') return Response.json({ order: serializeOrder(record) });

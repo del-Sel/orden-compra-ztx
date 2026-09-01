@@ -20,6 +20,9 @@ export async function POST(request: Request, context: RouteContext) {
   await ensureSchema(db);
   const record = await getOrder(db, { id });
   if (!record) return Response.json({ error: 'No encontramos esta orden.' }, { status: 404 });
+  if (record.row.archived_at) {
+    return Response.json({ error: 'La orden está archivada y no admite confirmaciones.' }, { status: 409 });
+  }
   if (isTerminalFinalStatus(record.row.final_status)) {
     return Response.json({ error: 'Esta orden ya está cerrada o cancelada.' }, { status: 409 });
   }
