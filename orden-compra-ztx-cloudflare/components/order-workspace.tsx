@@ -841,47 +841,28 @@ export default function OrderWorkspace({
         </div>
       </header>
       <main className="page">
-        <section className="page-heading">
-          <div>
-            <p className="eyebrow">
-              {view === "interno" ? "Orden de compra" : "Revisión del cliente"}
-            </p>
-            <h1>
-              {view === "interno"
-                ? "Armar orden de compra"
-                : "Orden de compra recibida"}
-            </h1>
-            <p className="heading-copy">
-              {view === "interno"
-                ? "Completá la planilla, enviala y esperá la firma del cliente."
-                : isSigned
-                  ? "Consultá la orden y confirmá cada entrega cuando la recibas."
-                  : "Revisá la información y firmá la orden para confirmar su recepción."}
-            </p>
-          </div>
-        </section>
         <section
           className={`hero-banner ${view === "cliente" ? "hero-banner-client" : ""}`}
         >
           <div className="hero-logo-wrap">
-            <img src="/logo-ful-mar-tagline.jpg" alt="Ful-Mar" />
+            <img src="/logo-ful-mar.png" alt="Ful-Mar" />
           </div>
           <div className="hero-copy">
             <span>
               {view === "interno"
-                ? "Gestión de compras"
-                : "Revisión y firma"}
+                ? "Autotaxímetro ZTX-PRO"
+                : "Orden de compra"}
             </span>
             <h2>
               {view === "interno"
-                ? "Orden de compra"
+                ? "Gestión de órdenes"
                 : isSigned
                   ? "Confirmación de entregas parciales"
                   : "Revisá y firmá la orden de compra"}
             </h2>
             <p>
               {view === "interno"
-                ? "Orden, seguimiento y entregas."
+                ? "Creá, enviá y seguí cada entrega."
                 : isSigned
                   ? "Confirmá la recepción de cada despacho."
                   : "La firma requiere nombre completo y DNI."}

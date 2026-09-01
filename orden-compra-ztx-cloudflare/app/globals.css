@@ -8,13 +8,13 @@
   --soft: #8290a2;
   --line: #d8e0e9;
   --line-soft: #e8edf2;
-  --bg: #eef2f6;
+  --bg: #f4f6f8;
   --surface: #ffffff;
   --surface-alt: #f7f9fb;
   --navy: #102641;
-  --purple: #5147a8;
-  --purple-strong: #443a97;
-  --purple-soft: #eeecfb;
+  --purple: #c72d32;
+  --purple-strong: #a92127;
+  --purple-soft: #fff0f1;
   --green: #217b59;
   --green-soft: #e8f5ef;
   --orange: #a8652f;
@@ -38,18 +38,19 @@ button { cursor: pointer; }
 .topbar-context { color: var(--muted); font-size: 12px; }
 .topbar-button { padding: 9px 12px; font-size: 12px; }
 
-.page { width: min(1160px, calc(100% - 48px)); margin: 0 auto; padding: 44px 0 76px; }
-.page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 25px; }
+.page { width: min(1160px, calc(100% - 48px)); margin: 0 auto; padding: 36px 0 76px; }
+.page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .eyebrow { margin: 0 0 10px; color: var(--purple); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .page-heading h1 { margin: 0; color: var(--ink); font: 800 31px/1.15 'Manrope', sans-serif; letter-spacing: -.9px; }
 .heading-copy { max-width: 660px; margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
-.hero-banner { position: relative; display: flex; align-items: center; gap: 22px; min-height: 148px; margin-bottom: 20px; overflow: hidden; border-radius: 13px; padding: 22px 28px; color: #fff; background: linear-gradient(115deg, #122b49 0%, #1c4163 58%, #3f4a85 100%); box-shadow: 0 12px 28px rgba(20, 42, 70, .16); }
+.hero-banner { position: relative; display: flex; align-items: center; gap: 22px; min-height: 136px; margin-bottom: 20px; overflow: hidden; border: 1px solid rgba(16, 38, 65, .08); border-radius: 16px; padding: 20px 26px 20px 30px; color: #fff; background: linear-gradient(115deg, #102b47 0%, #19405e 64%, #243f5d 100%); box-shadow: 0 12px 28px rgba(20, 42, 70, .13); }
+.hero-banner::before { position: absolute; top: 0; bottom: 0; left: 0; width: 5px; background: #df2828; content: ''; }
 .hero-banner::after { position: absolute; right: -80px; bottom: -120px; width: 330px; height: 330px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%; content: ''; box-shadow: 0 0 0 22px rgba(255, 255, 255, .035), 0 0 0 44px rgba(255, 255, 255, .025); }
 .hero-logo-wrap { z-index: 1; display: grid; place-items: center; width: 170px; height: 94px; flex: 0 0 170px; border-radius: 10px; background: #fff; box-shadow: 0 8px 18px rgba(0, 0, 0, .12); }
 .hero-logo-wrap img { width: 154px; height: 80px; object-fit: contain; }
 .hero-copy { z-index: 1; min-width: 0; }
-.hero-copy > span { color: #cbd9ed; font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
-.hero-copy h2 { max-width: 680px; margin: 7px 0 6px; color: #fff; font: 800 22px/1.2 'Manrope', sans-serif; letter-spacing: -.45px; }
+.hero-copy > span { color: #f3b9bd; font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.hero-copy h2 { max-width: 680px; margin: 7px 0 6px; color: #fff; font: 800 24px/1.2 'Manrope', sans-serif; letter-spacing: -.45px; }
 .hero-copy p { max-width: 680px; margin: 0; color: #dce7f3; font-size: 13px; line-height: 1.5; }
 .hero-mark { z-index: 1; display: grid; place-items: center; width: 48px; height: 48px; flex: 0 0 48px; margin-left: auto; border: 1px solid rgba(255, 255, 255, .25); border-radius: 50%; color: #fff; background: rgba(255, 255, 255, .1); font: 800 14px 'Manrope', sans-serif; }
 .hero-banner-client { background: linear-gradient(115deg, #18364e 0%, #245a63 58%, #2d7c73 100%); }
@@ -82,7 +83,7 @@ button { cursor: pointer; }
 .history-empty strong { color: var(--ink-soft); font-size: 12px; }
 
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 7px; padding: 11px 15px; font-size: 13px; font-weight: 700; transition: background .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
-.button-primary { color: #fff; background: var(--purple); box-shadow: 0 6px 14px rgba(81, 71, 168, .18); }
+.button-primary { color: #fff; background: var(--purple); box-shadow: 0 6px 14px rgba(199, 45, 50, .2); }
 .button-primary:hover { background: var(--purple-strong); transform: translateY(-1px); }
 .button-primary:disabled { cursor: not-allowed; opacity: .48; transform: none; }
 .button-light { border: 1px solid var(--line); color: var(--ink-soft); background: var(--surface); }
@@ -159,7 +160,7 @@ button { cursor: pointer; }
 .field { display: block; min-width: 0; }
 .field > span { display: block; margin-bottom: 7px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .field > input, .field > select, .field > textarea, .purchase-table input, .product-notes-input { width: 100%; border: 1px solid #dbe3eb; border-radius: 6px; outline: 0; padding: 10px 11px; color: var(--ink-soft); background: #fbfcfd; font-size: 13px; }
-.field > input:focus, .field > select:focus, .field > textarea:focus, .purchase-table input:focus, .product-notes-input:focus { border-color: #9289dc; box-shadow: 0 0 0 3px var(--purple-soft); background: #fff; }
+.field > input:focus, .field > select:focus, .field > textarea:focus, .purchase-table input:focus, .product-notes-input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-soft); background: #fff; }
 .field > strong { display: block; padding: 10px 0; color: var(--ink-soft); font-size: 13px; font-weight: 700; }
 .field > input[type='date'] { color-scheme: light; }
 .general-data-notes { margin-top: 20px; }
@@ -167,7 +168,7 @@ button { cursor: pointer; }
 .recipient-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .field-help { display: block; margin-top: 6px; color: var(--soft); font-size: 10px; line-height: 1.4; }
 .recipient-editor { min-height: 86px; border: 1px solid #dbe3eb; border-radius: 7px; padding: 9px 10px 8px; background: #fbfcfd; }
-.recipient-editor:focus-within { border-color: #9289dc; box-shadow: 0 0 0 3px var(--purple-soft); background: #fff; }
+.recipient-editor:focus-within { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-soft); background: #fff; }
 .recipient-tags { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; }
 .recipient-tag { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border: 1px solid #d7d2f2; border-radius: 999px; padding: 5px 7px 5px 9px; color: #3f397f; background: #f1effc; font-size: 11px; line-height: 1.2; }
 .recipient-tag button { display: inline-grid; place-items: center; width: 17px; height: 17px; border: 0; border-radius: 50%; padding: 0; color: #655bb0; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; }
@@ -278,7 +279,7 @@ button { cursor: pointer; }
 .general-observations textarea { min-height: 140px; resize: vertical; line-height: 1.6; }
 .main-observations { display: block; width: 100%; min-height: 145px; border: 1px solid #dbe3eb; border-radius: 8px; outline: 0; padding: 15px 16px; color: var(--ink-soft); background: #fbfcfd; font-size: 13px; line-height: 1.6; resize: vertical; }
 .main-observations::placeholder { color: #8b98a8; }
-.main-observations:focus { border-color: #9289dc; box-shadow: 0 0 0 3px var(--purple-soft); background: #fff; }
+.main-observations:focus { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-soft); background: #fff; }
 .readonly-note { margin: 0; padding: 16px; border-radius: 7px; color: var(--ink-soft); background: var(--surface-alt); font-size: 13px; line-height: 1.65; }
 .large-note { min-height: 110px; }
 .final-status-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -319,8 +320,10 @@ button { cursor: pointer; }
   .brand strong { font-size: 16px; }
   .brand-logo { width: 92px; }
   .page-heading h1 { font-size: 26px; }
+  .hero-banner { align-items: flex-start; flex-wrap: wrap; gap: 16px; padding: 18px; }
   .hero-logo-wrap { width: 140px; flex-basis: 140px; }
   .hero-logo-wrap img { width: 128px; }
+  .hero-copy { flex: 1 1 190px; }
   .flow-card { padding-inline: 15px; }
   .flow-steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px 5px; }
   .flow-step, .flow-step:last-child { flex: 1; }
