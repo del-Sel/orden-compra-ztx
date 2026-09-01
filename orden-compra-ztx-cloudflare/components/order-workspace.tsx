@@ -409,7 +409,7 @@ export default function OrderWorkspace({
       .toLowerCase();
     if (!candidate) return;
     if (!isValidEmail(candidate)) {
-      showToast("Ingresá un correo electrónico válido.");
+      showToast("Ingrese un correo electrónico válido.");
       return;
     }
     updateOrder(
@@ -440,7 +440,7 @@ export default function OrderWorkspace({
       stage === "draft" &&
       orderId &&
       !window.confirm(
-        "La orden actual quedará guardada. ¿Querés comenzar una nueva orden?",
+        "La orden actual quedará guardada. ¿Desea comenzar una nueva orden?",
       )
     )
       return;
@@ -502,7 +502,7 @@ export default function OrderWorkspace({
     const label = item.number || item.product || "esta orden";
     if (
       !window.confirm(
-        `¿Querés eliminar ${label}? También se eliminarán sus entregas y firmas. Esta acción no se puede deshacer.`,
+        `¿Desea eliminar ${label}? También se eliminarán sus entregas y firmas. Esta acción no se puede deshacer.`,
       )
     )
       return;
@@ -546,7 +546,7 @@ export default function OrderWorkspace({
     const label = order.number || order.product || "esta orden";
     if (
       !window.confirm(
-        `¿Querés cancelar ${label}? Va a quedar en el historial como cancelada y no permitirá nuevas acciones.`,
+        `¿Desea cancelar ${label}? Quedará en el historial como cancelada y no permitirá nuevas acciones.`,
       )
     )
       return;
@@ -581,7 +581,7 @@ export default function OrderWorkspace({
 
   async function handleCloseOrder() {
     if (!orderId || !isComplete) return;
-    if (!window.confirm("¿Querés cerrar esta orden? Va a quedar finalizada en el historial."))
+    if (!window.confirm("¿Desea cerrar esta orden? Quedará finalizada en el historial."))
       return;
 
     setBusy("close");
@@ -654,7 +654,7 @@ export default function OrderWorkspace({
     setBusy("save");
     try {
       await saveOrder();
-      showToast("Orden guardada online");
+      showToast("Orden guardada correctamente.");
     } catch (saveError) {
       showToast(
         saveError instanceof Error
@@ -920,7 +920,7 @@ export default function OrderWorkspace({
             </h2>
             <p>
               {view === "interno"
-                ? "Creá, enviá y seguí cada entrega."
+                ? "Creación, envío y seguimiento de entregas."
                 : isSigned
                   ? "Confirme o recebimento de cada despacho."
                   : "A assinatura requer nome completo e CPF."}
@@ -934,7 +934,6 @@ export default function OrderWorkspace({
             <aside className="history-panel">
               <div className="history-heading">
                 <div>
-                  <p className="eyebrow">Registro</p>
                   <h2>Historial de órdenes</h2>
                 </div>
                 <button
@@ -949,8 +948,8 @@ export default function OrderWorkspace({
                 <div className="history-empty">Cargando órdenes...</div>
               ) : history.length === 0 ? (
                 <div className="history-empty">
-                  <strong>Aún no hay órdenes</strong>
-                  <span>Las órdenes guardadas aparecerán acá.</span>
+                  <strong>No hay órdenes registradas</strong>
+                  <span>Las órdenes registradas aparecerán aquí.</span>
                 </div>
               ) : (
                 <div className="history-list">
@@ -1012,13 +1011,9 @@ export default function OrderWorkspace({
                       ? "Firmada"
                       : stage === "sent"
                         ? "Enviada al cliente"
-                        : "Borrador"}
+                    : "Borrador"}
                   </span>
                 </div>
-                <p className="flow-description">
-                  El estado se actualiza automáticamente con la firma y las
-                  entregas confirmadas.
-                </p>
               </section>
             )}
             {view === "interno" && stage === "sent" && (
@@ -1030,9 +1025,6 @@ export default function OrderWorkspace({
                     {formatRecipients(order.clientEmail) ||
                       "los destinatarios indicados"}
                   </strong>
-                  <p>
-                    El cliente puede abrirla desde el enlace y firmarla online.
-                  </p>
                 </div>
               </div>
             )}
@@ -1043,10 +1035,6 @@ export default function OrderWorkspace({
                   <strong>
                     Firma recibida de {order.signatureName || order.clientName}
                   </strong>
-                  <p>
-                    La orden quedó guardada online y ya permite registrar
-                    entregas parciales.
-                  </p>
                 </div>
               </div>
             )}
@@ -1149,11 +1137,6 @@ export default function OrderWorkspace({
                           ? "Dados gerais do pedido de compra"
                           : "Datos generales de la Orden de Compra"}
                       </h3>
-                      <p>
-                        {view === "interno"
-                          ? "Completá la información principal."
-                          : "Informações principais do pedido."}
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -1295,11 +1278,6 @@ export default function OrderWorkspace({
                           ? "Dados do destinatário"
                           : "Datos del destinatario"}
                       </h3>
-                      <p>
-                        {view === "cliente"
-                          ? "Dados do destinatário do pedido."
-                          : "Destinatarios de la orden."}
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -1361,7 +1339,7 @@ export default function OrderWorkspace({
                           </button>
                         </div>
                         <small className="field-help">
-                          Escribí un correo y presioná la flecha para agregarlo.
+                          Ingrese un correo y seleccione la flecha para incorporarlo.
                         </small>
                       </div>
                     ) : (
@@ -1382,11 +1360,6 @@ export default function OrderWorkspace({
                           ? "Detalhes dos produtos/serviços"
                           : "Detalle de productos/servicios"}
                       </h3>
-                      <p>
-                        {view === "cliente"
-                          ? "Quantidade total solicitada."
-                          : "Podés registrar la cantidad total del pedido."}
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -1501,10 +1474,6 @@ export default function OrderWorkspace({
                       <span className="section-number">04</span>
                       <div>
                         <h3>Assinatura do cliente</h3>
-                        <p>
-                          A assinatura confirma o recebimento e a conferência
-                          do pedido.
-                        </p>
                       </div>
                     </div>
                     <span
@@ -1606,10 +1575,6 @@ export default function OrderWorkspace({
                       <span className="section-number">05</span>
                       <div>
                         <h3>Confirmação de entregas parciais</h3>
-                        <p>
-                          Assine cada entrega após receber a quantidade
-                          indicada.
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -1772,10 +1737,6 @@ export default function OrderWorkspace({
                           <span className="section-number">05</span>
                           <div>
                             <h3>Seguimiento de entregas parciales</h3>
-                            <p>
-                              Registrá cada despacho. El estado cambia cuando el
-                              cliente confirma la recepción.
-                            </p>
                           </div>
                         </div>
                         <button
@@ -1877,10 +1838,6 @@ export default function OrderWorkspace({
                             <div className="automatic-delivery-state">
                               <span>Estado inicial</span>
                               <strong>En tránsito</strong>
-                              <small>
-                                Se actualizará cuando el cliente confirme la
-                                recepción.
-                              </small>
                             </div>
                             <label className="field">
                               <span>Observaciones</span>
@@ -1893,7 +1850,7 @@ export default function OrderWorkspace({
                                   }))
                                 }
                                 rows={2}
-                                placeholder="Información adicional"
+                                placeholder="Observaciones"
                               />
                             </label>
                           </div>
@@ -1988,7 +1945,7 @@ export default function OrderWorkspace({
                         </table>
                         {deliveries.length === 0 && (
                           <div className="empty-deliveries">
-                            Aún no se registraron entregas parciales.
+                            No se registraron entregas parciales.
                           </div>
                         )}
                       </div>
@@ -1999,7 +1956,6 @@ export default function OrderWorkspace({
                       <div className="lock-icon">⌁</div>
                       <div>
                         <strong>Estado final de la Orden de Compra</strong>
-                        <p>Se actualiza automáticamente después de la firma.</p>
                       </div>
                       <span>Bloqueado</span>
                     </div>
@@ -2010,10 +1966,6 @@ export default function OrderWorkspace({
                           <span className="section-number">06</span>
                           <div>
                             <h3>Estado final de la Orden de Compra</h3>
-                            <p>
-                              El sistema lo actualiza según la firma y las
-                              entregas registradas.
-                            </p>
                           </div>
                         </div>
                         <div className="final-status-actions">
@@ -2038,16 +1990,16 @@ export default function OrderWorkspace({
                         <span>✓</span>
                         <p>
                           {currentFinalStatus === "Cerrada"
-                            ? "La cantidad total de la orden ya fue recibida y la orden quedó cerrada."
+                            ? "Recepción total confirmada."
                             : currentFinalStatus === "Entrega completa"
-                              ? "La totalidad de las unidades ya fue recibida. Podés cerrar la orden cuando termines la gestión."
+                              ? "Todas las unidades fueron recibidas. Puede cerrar la orden."
                             : currentFinalStatus === "Entrega parcial"
-                              ? "Ya se confirmaron entregas, pero todavía queda cantidad pendiente."
-                              : currentFinalStatus === "Cancelada"
-                                ? "La orden fue cancelada y no admite nuevas acciones."
+                              ? "Hay entregas confirmadas y unidades pendientes."
+                            : currentFinalStatus === "Cancelada"
+                                ? "La orden fue cancelada."
                               : inTransitQuantity > 0
-                                ? `${inTransitQuantity.toLocaleString("es-AR")} equipos están en tránsito y todavía esperan la confirmación del cliente.`
-                                : "Todavía no se confirmó ninguna entrega para esta orden."}
+                                ? `${inTransitQuantity.toLocaleString("es-AR")} equipos en tránsito pendientes de recepción.`
+                                : "Sin entregas confirmadas."}
                         </p>
                       </div>
                     </div>
@@ -2058,7 +2010,6 @@ export default function OrderWorkspace({
                         <span className="section-number">07</span>
                         <div>
                           <h3>Observaciones generales</h3>
-                          <p>Información adicional de la orden.</p>
                         </div>
                       </div>
                     </div>
@@ -2070,7 +2021,7 @@ export default function OrderWorkspace({
                           updateOrder("generalNotes", event.target.value)
                         }
                         rows={5}
-                        placeholder="Escribí las observaciones generales..."
+                        placeholder="Ingrese observaciones generales"
                       />
                     ) : (
                       <p className="readonly-note large-note">
