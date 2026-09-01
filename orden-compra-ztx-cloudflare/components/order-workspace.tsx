@@ -468,40 +468,79 @@ export default function OrderWorkspace({
     }
   }
 
-  function handleNewOrder() {
+  async function handleNewOrder() {
+    if (busy) return;
     if (
       stage === "draft" &&
       orderId &&
       !window.confirm(
-        "La orden actual quedará guardada. ¿Desea comenzar una nueva orden?",
+        "Los cambios de la orden actual se guardarán. ¿Desea comenzar una nueva orden?",
       )
     )
       return;
-    setView("interno");
-    setStage("draft");
-    setOrder(initialOrder);
-    setDeliveries([]);
-    setOrderId("");
-    setShareUrl("");
-    setSignatureName("");
-    setSignatureDni("");
-    setSignatureAccepted(false);
-    setNewDelivery({
-      date: "",
-      quantity: "",
-      shipment: "",
-      fiscal: "",
-      notes: "",
-    });
-    setDeliverySignatureId(null);
-    setDeliverySignatureName("");
-    setDeliverySignatureDni("");
-    setRecipientDraft("");
-    setIsAddingDelivery(false);
-    setShowArchived(false);
-    setError("");
-    setToast("");
-    window.history.replaceState({}, "", "/");
+
+    setBusy("new");
+    try {
+      if (stage === "draft" && orderId) await saveOrder();
+
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(initialOrder),
+      });
+      const payload = (await response.json()) as ApiPayload;
+      if (!response.ok || !payload.order)
+        throw new Error(payload.error || "No pudimos crear el borrador.");
+
+      const saved = normalizeOrder(payload.order);
+      setView("interno");
+      setStage(saved.status ?? "draft");
+      setOrder(saved);
+      setDeliveries(payload.order.deliveries ?? []);
+      setOrderId(saved.id ?? "");
+      setShareUrl(
+        saved.shareToken
+          ? `${window.location.origin}/orden/${saved.shareToken}`
+          : "",
+      );
+      setSignatureName("");
+      setSignatureDni("");
+      setSignatureAccepted(false);
+      setNewDelivery({
+        date: "",
+        quantity: "",
+        shipment: "",
+        fiscal: "",
+        notes: "",
+      });
+      setDeliverySignatureId(null);
+      setDeliverySignatureName("");
+      setDeliverySignatureDni("");
+      setRecipientDraft("");
+      setIsAddingDelivery(false);
+      setShowArchived(false);
+      setError("");
+      if (saved.id)
+        window.history.replaceState(
+          {},
+          "",
+          `/?id=${encodeURIComponent(saved.id)}`,
+        );
+      try {
+        await refreshHistory();
+      } catch {
+        /* El borrador ya se creó aunque el historial tarde en actualizarse. */
+      }
+      showToast("Borrador creado.");
+    } catch (newOrderError) {
+      showToast(
+        newOrderError instanceof Error
+          ? newOrderError.message
+          : "No pudimos crear el borrador.",
+      );
+    } finally {
+      setBusy("");
+    }
   }
 
   async function handleSelectHistory(id: string) {
