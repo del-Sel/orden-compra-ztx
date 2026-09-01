@@ -806,16 +806,28 @@ export default function OrderWorkspace({
   if (loading)
     return (
       <div className="loading-page">
-        <img src="/logo-ful-mar.png" alt="Ful-Mar" className="loading-logo" />
-        <p>Cargando orden...</p>
+        <div className="loading-card" role="status" aria-live="polite">
+          <div className="loading-logo-frame">
+            <img src="/logo-ful-mar.png" alt="Ful-Mar" className="loading-logo" />
+          </div>
+          <div className="loading-copy">
+            <strong>Cargando orden de compra</strong>
+            <span>Un momento, por favor.</span>
+          </div>
+          <span className="loading-progress" aria-hidden="true" />
+        </div>
       </div>
     );
   if (error)
     return (
       <div className="error-page">
-        <img src="/logo-ful-mar.png" alt="Ful-Mar" className="loading-logo" />
-        <h1>No pudimos abrir esta orden</h1>
-        <p>{error}</p>
+        <div className="loading-card error-card">
+          <div className="loading-logo-frame">
+            <img src="/logo-ful-mar.png" alt="Ful-Mar" className="loading-logo" />
+          </div>
+          <h1>No pudimos abrir esta orden</h1>
+          <p>{error}</p>
+        </div>
       </div>
     );
 

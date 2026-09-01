@@ -286,11 +286,19 @@ button { cursor: pointer; }
 .final-status-actions .button { padding: 9px 12px; font-size: 12px; }
 .sheet-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 20px 28px; background: #f8fafc; }
 
-.loading-page, .error-page { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 13px; color: var(--muted); background: var(--bg); }
-.loading-logo { width: 120px; height: 78px; object-fit: contain; }
-.loading-page p, .error-page p { margin: 0; font-size: 14px; }
-.error-page h1 { margin: 0; color: var(--ink); font: 800 22px 'Manrope', sans-serif; }
-.error-page { text-align: center; }
+.loading-page, .error-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; color: var(--muted); background: radial-gradient(circle at 50% 0%, #fff 0, var(--bg) 58%); }
+.loading-card { width: min(100%, 360px); display: grid; justify-items: center; gap: 20px; border: 1px solid var(--line); border-radius: 18px; padding: 30px 28px 26px; background: rgba(255, 255, 255, .96); box-shadow: 0 18px 45px rgba(20, 36, 58, .1); text-align: center; }
+.loading-logo-frame { display: grid; place-items: center; width: 220px; height: 126px; border: 1px solid #edf0f3; border-radius: 14px; background: #fff; box-shadow: 0 8px 18px rgba(20, 36, 58, .06); }
+.loading-logo { display: block; width: 196px; height: 108px; object-fit: contain; }
+.loading-copy { display: grid; gap: 5px; }
+.loading-copy strong { color: var(--ink); font: 800 16px/1.25 'Manrope', sans-serif; }
+.loading-copy span { color: var(--muted); font-size: 13px; }
+.loading-progress { width: 132px; height: 4px; overflow: hidden; border-radius: 999px; background: #f4d8da; }
+.loading-progress::before { display: block; width: 42%; height: 100%; border-radius: inherit; background: var(--purple); content: ''; animation: loading-progress 1.2s ease-in-out infinite; }
+@keyframes loading-progress { 0% { transform: translateX(-115%); } 100% { transform: translateX(265%); } }
+.error-card { gap: 16px; }
+.error-card h1 { margin: 0; color: var(--ink); font: 800 22px/1.2 'Manrope', sans-serif; }
+.error-card p { max-width: 290px; margin: 0; font-size: 13px; line-height: 1.5; }
 .toast { position: fixed; right: 24px; bottom: 24px; z-index: 10; display: flex; align-items: center; gap: 9px; max-width: min(520px, calc(100% - 32px)); padding: 13px 16px; border: 1px solid #cce7da; border-radius: 8px; color: #2f6b54; background: #f3fbf7; box-shadow: 0 10px 28px rgba(36, 59, 82, .14); font-size: 12px; }
 .toast span { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #4d9c79; font-size: 11px; }
 
