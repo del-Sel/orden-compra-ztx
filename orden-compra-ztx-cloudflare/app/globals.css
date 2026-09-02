@@ -59,7 +59,7 @@ button { cursor: pointer; }
 .workspace-layout.client-layout { display: block; }
 .workspace-content { min-width: 0; }
 .history-panel { position: sticky; top: 18px; overflow: hidden; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 8px 22px rgba(31, 50, 76, .05); }
-.history-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.history-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
 .history-actions { display: flex; align-items: center; gap: 6px; }
 .history-heading .eyebrow { margin-bottom: 7px; font-size: 10px; }
 .history-heading h2 { margin: 0; color: var(--ink); font: 800 17px/1.2 'Manrope', sans-serif; letter-spacing: -.3px; }

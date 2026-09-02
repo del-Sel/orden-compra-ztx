@@ -71,7 +71,7 @@ export async function allocateOrderNumber(db: D1Database) {
   if (!Number.isInteger(allocatedNumber) || allocatedNumber < 1) {
     throw new Error('No fue posible asignar el número de la orden.');
   }
-  return `OC-${String(allocatedNumber).padStart(6, '0')}`;
+  return String(allocatedNumber);
 }
 
 export async function ensureSchema(db: D1Database) {
@@ -104,6 +104,15 @@ export async function ensureSchema(db: D1Database) {
       ), 0) + 1
     FROM purchase_orders
   `).run();
+  const plainNumberingMigration = await db.prepare(`
+    INSERT OR IGNORE INTO app_settings (key, value)
+    VALUES ('plain_order_numbers_v1', '1')
+  `).run();
+  if (plainNumberingMigration.meta.changes === 1) {
+    await db.prepare(
+      'UPDATE purchase_order_sequence SET next_number = 1 WHERE id = 1',
+    ).run();
+  }
   await purgeExpiredArchivedOrders(db);
   await db.prepare("UPDATE deliveries SET received_quantity = quantity WHERE status = 'Entregado' AND received_quantity = 0").run();
 }
