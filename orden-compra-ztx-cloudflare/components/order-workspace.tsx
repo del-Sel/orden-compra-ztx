@@ -473,6 +473,7 @@ export default function OrderWorkspace({
     if (
       stage === "draft" &&
       orderId &&
+      !isArchived &&
       !window.confirm(
         "Los cambios de la orden actual se guardarán. ¿Desea comenzar una nueva orden?",
       )
@@ -481,7 +482,7 @@ export default function OrderWorkspace({
 
     setBusy("new");
     try {
-      if (stage === "draft" && orderId) await saveOrder();
+      if (stage === "draft" && orderId && !isArchived) await saveOrder();
 
       const response = await fetch("/api/orders", {
         method: "POST",
