@@ -1515,7 +1515,7 @@ export default function OrderWorkspace({
                       <tr>
                         <th>{view === "cliente" ? "Produto" : "Producto"}</th>
                         <th>{view === "cliente" ? "Descrição" : "Descripción"}</th>
-                        <th>Preço (R$)</th>
+                        <th>Precio (R$)</th>
                         <th>{view === "cliente" ? "Quantidade total" : "Cantidad total"}</th>
                         <th>{view === "cliente" ? "Observações" : "Observaciones"}</th>
                       </tr>
