@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { FROM_EMAIL, INTERNAL_EMAILS, parseEmailList } from '@/lib/order-config';
+import { FROM_EMAIL, parseEmailList } from '@/lib/order-config';
 import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
 import { orderMessageId, replyEmailHeaders, resolveSentMessageId } from '@/lib/email-thread';
 import { calculateFinalStatus, isTerminalFinalStatus } from '@/lib/order-status';
@@ -52,11 +52,11 @@ export async function POST(request: Request, context: RouteContext) {
   const apiKey =
     (env as unknown as WorkerSecrets).RESEND_API_KEY ||
     (typeof process !== 'undefined' ? process.env.RESEND_API_KEY : undefined);
-  const recipients = parseEmailList(INTERNAL_EMAILS.join(', '));
+  const recipients = parseEmailList(record.row.client_email);
   if (!apiKey) {
     notificationError = 'La recepción quedó registrada, pero no se pudo enviar el aviso por correo.';
   } else if (recipients.length === 0) {
-    notificationError = 'La recepción quedó registrada, pero no hay destinatarios internos configurados.';
+    notificationError = 'La recepción quedó registrada, pero la orden no tiene correos de destino.';
   } else {
     const internalUrl = new URL(`/?id=${encodeURIComponent(id)}`, request.url).toString();
     const threadId = record.row.email_thread_id || orderMessageId(id);
