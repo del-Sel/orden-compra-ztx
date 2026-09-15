@@ -68,7 +68,7 @@ export async function allocateOrderNumber(db: D1Database) {
     `)
     .first<{ allocated_number: number }>();
   const allocatedNumber = Number(sequence?.allocated_number);
-  if (!Number.isInteger(allocatedNumber) || allocatedNumber < 1) {
+  if (!Number.isInteger(allocatedNumber) || allocatedNumber < 0) {
     throw new Error('No fue posible asignar el número de la orden.');
   }
   return String(allocatedNumber);
@@ -111,6 +111,17 @@ export async function ensureSchema(db: D1Database) {
   if (plainNumberingMigration.meta.changes === 1) {
     await db.prepare(
       'UPDATE purchase_order_sequence SET next_number = 1 WHERE id = 1',
+    ).run();
+  }
+  // One-time reset requested for the plain numbering sequence: the next
+  // newly created order will be 0, then subsequent orders will be 1, 2, 3...
+  const zeroBasedNumberingReset = await db.prepare(`
+    INSERT OR IGNORE INTO app_settings (key, value)
+    VALUES ('zero_based_order_numbers_v1', '1')
+  `).run();
+  if (zeroBasedNumberingReset.meta.changes === 1) {
+    await db.prepare(
+      'UPDATE purchase_order_sequence SET next_number = 0 WHERE id = 1',
     ).run();
   }
   await purgeExpiredArchivedOrders(db);
