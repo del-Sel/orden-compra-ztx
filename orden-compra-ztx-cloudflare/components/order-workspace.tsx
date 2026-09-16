@@ -31,6 +31,7 @@ type OrderData = {
   signatureDni?: string | null;
   signedAt?: string | null;
   archivedAt?: string | null;
+  isTest?: boolean;
 };
 
 type Delivery = {
@@ -58,6 +59,7 @@ type OrderSummary = {
   totalQuantity: number;
   updatedAt: string;
   archivedAt?: string | null;
+  isTest?: boolean;
 };
 
 type ApiPayload = {
@@ -268,7 +270,9 @@ export default function OrderWorkspace({
   const [recipientDraft, setRecipientDraft] = useState("");
   const [history, setHistory] = useState<OrderSummary[]>([]);
   const [archivedHistory, setArchivedHistory] = useState<OrderSummary[]>([]);
+  const [testHistory, setTestHistory] = useState<OrderSummary[]>([]);
   const [showArchived, setShowArchived] = useState(false);
+  const [showTests, setShowTests] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(
     initialMode === "interno",
   );
@@ -308,6 +312,11 @@ export default function OrderWorkspace({
   const isComplete = currentFinalStatus === "Entrega completa";
   const isCancelled = currentFinalStatus === "Cancelada";
   const isArchived = Boolean(order.archivedAt);
+  const visibleHistory = showTests
+    ? testHistory
+    : showArchived
+      ? archivedHistory
+      : history;
   const canEdit =
     view === "interno" &&
     stage === "draft" &&
@@ -322,6 +331,7 @@ export default function OrderWorkspace({
     setOrderId(loaded.id ?? "");
     setDeliveries(payload.order.deliveries ?? []);
     setStage(loaded.status ?? "draft");
+    setShowTests(Boolean(loaded.isTest));
     setShareUrl(
       payload.shareUrl ||
         (loaded.shareToken
@@ -331,10 +341,13 @@ export default function OrderWorkspace({
     setRecipientDraft("");
   }
 
-  async function refreshHistory(archived = false) {
+  async function refreshHistory(archived = false, test = false) {
     if (initialMode !== "interno" || token) return;
+    const params = new URLSearchParams({ history: "1" });
+    if (archived) params.set("archived", "1");
+    if (test) params.set("test", "1");
     const response = await fetch(
-      `/api/orders?history=1${archived ? "&archived=1" : ""}`,
+      `/api/orders?${params.toString()}`,
       {
       cache: "no-store",
       },
@@ -343,10 +356,12 @@ export default function OrderWorkspace({
     if (!response.ok)
       throw new Error(payload.error || "No pudimos cargar el historial.");
     if (archived) setArchivedHistory(payload.orders ?? []);
+    else if (test) setTestHistory(payload.orders ?? []);
     else setHistory(payload.orders ?? []);
   }
 
   async function handleToggleArchived() {
+    if (showTests) setShowTests(false);
     if (showArchived) {
       setShowArchived(false);
       return;
@@ -360,6 +375,27 @@ export default function OrderWorkspace({
         archiveError instanceof Error
           ? archiveError.message
           : "No fue posible cargar las órdenes archivadas.",
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function handleToggleTests() {
+    if (showTests) {
+      setShowTests(false);
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      await refreshHistory(false, true);
+      setShowArchived(false);
+      setShowTests(true);
+    } catch (testError) {
+      showToast(
+        testError instanceof Error
+          ? testError.message
+          : "No fue posible cargar las órdenes de prueba.",
       );
     } finally {
       setHistoryLoading(false);
@@ -468,7 +504,7 @@ export default function OrderWorkspace({
     }
   }
 
-  async function handleNewOrder() {
+  async function handleNewOrder(isTest = showTests) {
     if (busy) return;
     if (
       stage === "draft" &&
@@ -487,7 +523,7 @@ export default function OrderWorkspace({
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(initialOrder),
+        body: JSON.stringify({ ...initialOrder, isTest }),
       });
       const payload = (await response.json()) as ApiPayload;
       if (!response.ok || !payload.order)
@@ -520,6 +556,7 @@ export default function OrderWorkspace({
       setRecipientDraft("");
       setIsAddingDelivery(false);
       setShowArchived(false);
+      setShowTests(isTest);
       setError("");
       if (saved.id)
         window.history.replaceState(
@@ -528,7 +565,7 @@ export default function OrderWorkspace({
           `/?id=${encodeURIComponent(saved.id)}`,
         );
       try {
-        await refreshHistory();
+        await refreshHistory(false, isTest);
       } catch {
         /* El borrador ya se creó aunque el historial tarde en actualizarse. */
       }
@@ -610,6 +647,53 @@ export default function OrderWorkspace({
         archiveError instanceof Error
           ? archiveError.message
           : "No fue posible archivar la orden.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleDeleteTestOrder(item: OrderSummary) {
+    const label = item.number || item.product || "esta prueba";
+    if (
+      !window.confirm(
+        `¿Eliminar definitivamente ${label}? Esta prueba y sus entregas no podrán recuperarse.`,
+      )
+    )
+      return;
+
+    setBusy(`delete-test-${item.id}`);
+    try {
+      const response = await fetch(`/api/orders/${item.id}?permanent=1`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json()) as ApiPayload;
+      if (!response.ok)
+        throw new Error(payload.error || "No fue posible eliminar la prueba.");
+
+      setTestHistory((current) => current.filter((entry) => entry.id !== item.id));
+      if (item.id === orderId) {
+        setView("interno");
+        setStage("draft");
+        setOrder(initialOrder);
+        setDeliveries([]);
+        setOrderId("");
+        setShareUrl("");
+        setSignatureName("");
+        setSignatureDni("");
+        setSignatureAccepted(false);
+        setRecipientDraft("");
+        setIsAddingDelivery(false);
+        setShowArchived(false);
+        setShowTests(true);
+        window.history.replaceState({}, "", "/");
+      }
+      showToast("Prueba eliminada definitivamente.");
+    } catch (deleteError) {
+      showToast(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "No fue posible eliminar la prueba.",
       );
     } finally {
       setBusy("");
@@ -992,9 +1076,9 @@ export default function OrderWorkspace({
             <button
               type="button"
               className="button button-light topbar-button"
-              onClick={handleNewOrder}
+              onClick={() => handleNewOrder(showTests)}
             >
-              Nueva orden
+              {showTests ? "Nueva prueba" : "Nueva orden"}
             </button>
           )}
         </div>
@@ -1009,19 +1093,25 @@ export default function OrderWorkspace({
           <div className="hero-copy">
             <span>
               {view === "interno"
-                ? "Autotaxímetro ZTX-PRO"
+                ? showTests
+                  ? "Modo de pruebas"
+                  : "Autotaxímetro ZTX-PRO"
                 : "Pedido de compra"}
             </span>
             <h2>
               {view === "interno"
-                ? "Gestión de órdenes"
+                ? showTests
+                  ? "Pruebas del sistema"
+                  : "Gestión de órdenes"
                 : isSigned
                   ? "Confirmação de entregas parciais"
                   : "Revise e assine o pedido de compra"}
             </h2>
             <p>
               {view === "interno"
-                ? "Creación, envío y seguimiento de entregas."
+                ? showTests
+                  ? "Probá el envío, la firma y las entregas sin afectar las órdenes operativas."
+                  : "Creación, envío y seguimiento de entregas."
                 : isSigned
                   ? "Confirme o recebimento de cada despacho."
                   : "A assinatura requer nome completo e CPF."}
@@ -1035,9 +1125,29 @@ export default function OrderWorkspace({
             <aside className="history-panel">
               <div className="history-heading">
                 <div>
-                  <h2>{showArchived ? "Órdenes archivadas" : "Historial de órdenes"}</h2>
+                  <h2>
+                    {showTests
+                      ? "Órdenes de prueba"
+                      : showArchived
+                        ? "Órdenes archivadas"
+                        : "Historial de órdenes"}
+                  </h2>
+                  {showTests && (
+                    <p className="history-mode-note">
+                      Se eliminan definitivamente y no pasan al archivo.
+                    </p>
+                  )}
                 </div>
                 <div className="history-actions">
+                  <button
+                    type="button"
+                    className="history-archive-button"
+                    onClick={handleToggleTests}
+                    disabled={historyLoading}
+                  >
+                    {showTests ? "Órdenes" : "Pruebas"}
+                  </button>
+                  {!showTests && (
                   <button
                     type="button"
                     className="history-archive-button"
@@ -1046,33 +1156,38 @@ export default function OrderWorkspace({
                   >
                     {showArchived ? "Activas" : "Archivadas"}
                   </button>
+                  )}
                   <button
                     type="button"
                     className="history-new-button"
-                    onClick={handleNewOrder}
+                    onClick={() => handleNewOrder(showTests)}
                   >
-                    ＋ Nueva
+                    {showTests ? "＋ Nueva prueba" : "＋ Nueva"}
                   </button>
                 </div>
               </div>
               {historyLoading ? (
                 <div className="history-empty">Cargando órdenes...</div>
-              ) : (showArchived ? archivedHistory : history).length === 0 ? (
+              ) : visibleHistory.length === 0 ? (
                 <div className="history-empty">
                   <strong>
-                    {showArchived
+                    {showTests
+                      ? "No hay pruebas registradas"
+                      : showArchived
                       ? "No hay órdenes archivadas"
                       : "No hay órdenes registradas"}
                   </strong>
                   <span>
-                    {showArchived
+                    {showTests
+                      ? "Creá una prueba para recorrer el circuito completo."
+                      : showArchived
                       ? "Las órdenes archivadas se conservan durante 24 horas."
                       : "Las órdenes registradas aparecerán aquí."}
                   </span>
                 </div>
               ) : (
                 <div className="history-list">
-                  {(showArchived ? archivedHistory : history).map((item) => (
+                  {visibleHistory.map((item) => (
                     <div className="history-item-row" key={item.id}>
                       <button
                         type="button"
@@ -1083,9 +1198,9 @@ export default function OrderWorkspace({
                         <span className="history-item-top">
                           <strong>{item.number || "Sin número"}</strong>
                           <span
-                            className={`history-status ${showArchived ? "status-archived" : historyStatusClass(item)}`}
+                            className={`history-status ${showTests ? "status-test" : showArchived ? "status-archived" : historyStatusClass(item)}`}
                           >
-                            {showArchived ? "Archivada" : historyStatusLabel(item)}
+                            {showTests ? "Prueba" : showArchived ? "Archivada" : historyStatusLabel(item)}
                           </span>
                         </span>
                         <span className="history-product">
@@ -1095,22 +1210,26 @@ export default function OrderWorkspace({
                           {item.clientName || "Cliente sin nombre"} ·{" "}
                           {showArchived && item.archivedAt
                             ? `Archivada ${formatUpdatedAt(item.archivedAt)}`
-                            : formatUpdatedAt(item.updatedAt)}
+                            : showTests
+                              ? `Prueba · ${formatUpdatedAt(item.updatedAt)}`
+                              : formatUpdatedAt(item.updatedAt)}
                         </span>
                       </button>
                       <button
                         type="button"
                         className={`history-delete-button ${showArchived ? "history-restore-button" : ""}`}
                         onClick={() =>
-                          showArchived
-                            ? handleRestoreOrder(item.id)
-                            : handleArchiveOrder(item)
+                          showTests
+                            ? handleDeleteTestOrder(item)
+                            : showArchived
+                              ? handleRestoreOrder(item.id)
+                              : handleArchiveOrder(item)
                         }
                         disabled={Boolean(busy)}
-                        aria-label={`${showArchived ? "Restaurar" : "Archivar"} ${item.number || "esta orden"}`}
-                        title={showArchived ? "Restaurar orden" : "Archivar orden"}
+                        aria-label={`${showTests ? "Eliminar definitivamente" : showArchived ? "Restaurar" : "Archivar"} ${item.number || "esta orden"}`}
+                        title={showTests ? "Eliminar definitivamente" : showArchived ? "Restaurar orden" : "Archivar orden"}
                       >
-                        {showArchived ? "↺" : "×"}
+                        {showTests ? "⌫" : showArchived ? "↺" : "×"}
                       </button>
                     </div>
                   ))}

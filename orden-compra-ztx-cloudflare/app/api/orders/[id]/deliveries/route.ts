@@ -1,12 +1,10 @@
-import { env } from 'cloudflare:workers';
-import { FROM_EMAIL, parseEmailList } from '@/lib/order-config';
+import { parseEmailList } from '@/lib/order-config';
 import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
-import { orderMessageId, replyEmailHeaders, resolveSentMessageId } from '@/lib/email-thread';
+import { orderMessageId, replyEmailHeaders } from '@/lib/email-thread';
+import { sendEmail } from '@/lib/email-provider';
 import { calculateFinalStatus, isTerminalFinalStatus } from '@/lib/order-status';
 
 type RouteContext = { params: Promise<{ id: string }> };
-type WorkerSecrets = { RESEND_API_KEY?: string };
-
 export async function POST(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const body = await request.json() as { date?: string; quantity?: number; shipment?: string; fiscal?: string; notes?: string };
@@ -46,31 +44,22 @@ export async function POST(request: Request, context: RouteContext) {
   const finalStatus = calculateFinalStatus('signed', record.row.total_quantity, deliveredQuantity);
   await db.prepare('UPDATE purchase_orders SET final_status = ?1, updated_at = ?2 WHERE id = ?3').bind(finalStatus, now, id).run();
   let notificationError = '';
-  const apiKey =
-    (env as unknown as WorkerSecrets).RESEND_API_KEY ||
-    (typeof process !== 'undefined' ? process.env.RESEND_API_KEY : undefined);
   const recipients = parseEmailList(record.row.client_email);
-  if (!apiKey) {
-    notificationError = 'El despacho quedó registrado, pero no se pudo enviar el aviso por correo.';
-  } else if (recipients.length === 0) {
+  if (recipients.length === 0) {
     notificationError = 'El despacho quedó registrado, pero la orden no tiene un correo de destino.';
   } else {
     const shareUrl = new URL(`/orden/${record.row.share_token}`, request.url).toString();
     const threadId = record.row.email_thread_id || orderMessageId(id);
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: recipients,
-        subject: `Re: Pedido de compra ${record.row.number} — Entrega parcial ${nextNumber}`,
-        headers: replyEmailHeaders(threadId),
-        html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>Entrega parcial do pedido ${record.row.number}</h2><p>Encaminhamos a entrega parcial <strong>${nextNumber}</strong>, contendo <strong>${quantity}</strong> equipamentos.</p><p>A entrega encontra-se <strong>em trânsito</strong>. Após recebê-la, acesse o link abaixo para confirmar o recebimento informando seu nome e CPF.</p><p><a href="${shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#c72d32;color:white;text-decoration:none">Confirmar recebimento</a></p></div>`,
-      }),
+    const result = await sendEmail({
+      to: recipients,
+      subject: `Re: Pedido de compra ${record.row.number} — Entrega parcial ${nextNumber}`,
+      headers: replyEmailHeaders(threadId),
+      fallbackMessageId: threadId,
+      html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>Entrega parcial do pedido ${record.row.number}</h2><p>Encaminhamos a entrega parcial <strong>${nextNumber}</strong>, contendo <strong>${quantity}</strong> equipamentos.</p><p>A entrega encontra-se <strong>em trânsito</strong>. Após recebê-la, acesse o link abaixo para confirmar o recebimento informando seu nome e CPF.</p><p><a href="${shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#c72d32;color:white;text-decoration:none">Confirmar recebimento</a></p></div>`,
     });
-    if (!response.ok) notificationError = `El despacho quedó registrado, pero no se pudo enviar el aviso: ${await response.text()}`;
+    if (!result.ok) notificationError = `El despacho quedó registrado, pero no se pudo enviar el aviso: ${result.error}`;
     else {
-      const storedMessageId = await resolveSentMessageId(apiKey, response, threadId);
+      const storedMessageId = result.messageId || threadId;
       await db.prepare('UPDATE purchase_orders SET email_thread_id = COALESCE(email_thread_id, ?1) WHERE id = ?2').bind(record.row.email_thread_id || storedMessageId, id).run();
     }
   }

@@ -28,6 +28,7 @@ export type OrderRow = {
   signed_at: string | null;
   email_thread_id: string | null;
   archived_at: string | null;
+  is_test: number;
   created_at: string;
   updated_at: string;
 };
@@ -51,7 +52,7 @@ export type DeliveryRow = {
 
 export type OrderSummaryRow = Pick<
   OrderRow,
-  'id' | 'number' | 'product' | 'client_name' | 'status' | 'final_status' | 'total_quantity' | 'updated_at' | 'archived_at'
+  'id' | 'number' | 'product' | 'client_name' | 'status' | 'final_status' | 'total_quantity' | 'updated_at' | 'archived_at' | 'is_test'
 >;
 
 export function getDb() {
@@ -84,6 +85,7 @@ export async function ensureSchema(db: D1Database) {
     'ALTER TABLE purchase_orders ADD COLUMN email_thread_id TEXT',
     'ALTER TABLE purchase_orders ADD COLUMN general_data_notes TEXT',
     'ALTER TABLE purchase_orders ADD COLUMN archived_at TEXT',
+    'ALTER TABLE purchase_orders ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE deliveries ADD COLUMN received_quantity INTEGER NOT NULL DEFAULT 0',
   ];
   for (const statement of compatibilityColumns) {
@@ -148,14 +150,16 @@ export async function getOrderSummaries(
   db: D1Database,
   limit = 50,
   archived = false,
+  test = false,
 ) {
   const result = await db.prepare(`
-    SELECT id, number, product, client_name, status, final_status, total_quantity, updated_at, archived_at
+    SELECT id, number, product, client_name, status, final_status, total_quantity, updated_at, archived_at, is_test
     FROM purchase_orders
     WHERE archived_at IS ${archived ? 'NOT ' : ''}NULL
+      AND is_test = ?2
     ORDER BY updated_at DESC
     LIMIT ?1
-  `).bind(Math.min(Math.max(limit, 1), 100)).all<OrderSummaryRow>();
+  `).bind(Math.min(Math.max(limit, 1), 100), test ? 1 : 0).all<OrderSummaryRow>();
   return result.results;
 }
 
@@ -185,6 +189,7 @@ export function serializeOrder(order: Awaited<ReturnType<typeof getOrder>>) {
     signatureDni: order.row.signature_dni,
     signedAt: order.row.signed_at,
     archivedAt: order.row.archived_at,
+    isTest: Boolean(order.row.is_test),
     deliveries: order.deliveries.map((delivery) => ({
       id: delivery.id,
       deliveryNumber: delivery.delivery_number,
@@ -213,5 +218,6 @@ export function serializeOrderSummary(row: OrderSummaryRow) {
     totalQuantity: row.total_quantity,
     updatedAt: row.updated_at,
     archivedAt: row.archived_at,
+    isTest: Boolean(row.is_test),
   };
 }

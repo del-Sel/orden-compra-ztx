@@ -24,6 +24,7 @@ export const schemaStatements = [
     signed_at TEXT,
     email_thread_id TEXT,
     archived_at TEXT,
+    is_test INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,

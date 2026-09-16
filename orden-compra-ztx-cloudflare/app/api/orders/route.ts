@@ -7,7 +7,12 @@ export async function GET(request: Request) {
   if (history === '1') {
     const db = getDb();
     await ensureSchema(db);
-    const orders = await getOrderSummaries(db, 50, url.searchParams.get('archived') === '1');
+    const orders = await getOrderSummaries(
+      db,
+      50,
+      url.searchParams.get('archived') === '1',
+      url.searchParams.get('test') === '1',
+    );
     return Response.json({ orders: orders.map(serializeOrderSummary) });
   }
   const id = url.searchParams.get('id') ?? undefined;
@@ -24,6 +29,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body = await request.json() as Record<string, unknown>;
   const clientEmail = parseEmailList(String(body.clientEmail ?? '')).join(', ');
+  const isTest = body.isTest === true;
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const shareToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '');
@@ -34,8 +40,8 @@ export async function POST(request: Request) {
   await db.prepare(`INSERT INTO purchase_orders (
     id, share_token, number, issue_date, requested_by, payment, due_date, buyer,
     product, description, unit_price, total_quantity, product_notes, general_notes, general_data_notes,
-    client_name, client_email, status, final_status, created_at, updated_at
-  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 'draft', 'Pendiente de entrega', ?18, ?18)`).bind(
+    client_name, client_email, status, final_status, is_test, created_at, updated_at
+  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 'draft', 'Pendiente de entrega', ?18, ?19, ?19)`).bind(
     id,
     shareToken,
     orderNumber,
@@ -53,6 +59,7 @@ export async function POST(request: Request) {
     String(body.generalDataNotes ?? ''),
     String(body.clientName ?? ''),
     clientEmail,
+    isTest ? 1 : 0,
     now,
   ).run();
 

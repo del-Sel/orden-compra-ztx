@@ -1,12 +1,10 @@
-import { env } from 'cloudflare:workers';
-import { FROM_EMAIL, INTERNAL_EMAILS, parseEmailList } from '@/lib/order-config';
+import { parseEmailList } from '@/lib/order-config';
 import { ensureSchema, getDb, getOrder, serializeOrder } from '@/lib/db';
-import { orderMessageId, replyEmailHeaders, resolveSentMessageId } from '@/lib/email-thread';
+import { orderMessageId, replyEmailHeaders } from '@/lib/email-thread';
+import { sendEmail } from '@/lib/email-provider';
 import { calculateFinalStatus, isTerminalFinalStatus } from '@/lib/order-status';
 
 type RouteContext = { params: Promise<{ id: string; deliveryId: string }> };
-type WorkerSecrets = { RESEND_API_KEY?: string };
-
 export async function POST(request: Request, context: RouteContext) {
   const { id, deliveryId } = await context.params;
   const body = await request.json() as { signatureName?: string; signatureDni?: string };
@@ -49,34 +47,25 @@ export async function POST(request: Request, context: RouteContext) {
   await db.prepare('UPDATE purchase_orders SET final_status = ?1, updated_at = ?2 WHERE id = ?3').bind(finalStatus, receivedAt, id).run();
 
   let notificationError = '';
-  const apiKey =
-    (env as unknown as WorkerSecrets).RESEND_API_KEY ||
-    (typeof process !== 'undefined' ? process.env.RESEND_API_KEY : undefined);
-  const recipients = parseEmailList(INTERNAL_EMAILS.join(', '));
-  if (!apiKey) {
-    notificationError = 'La recepción quedó registrada, pero no se pudo enviar el aviso por correo.';
-  } else if (recipients.length === 0) {
-    notificationError = 'La recepción quedó registrada, pero no hay destinatarios internos configurados.';
+  const recipients = parseEmailList(record.row.client_email);
+  if (recipients.length === 0) {
+    notificationError = 'La recepción quedó registrada, pero la orden no tiene correos de destino.';
   } else {
     const internalUrl = new URL(`/?id=${encodeURIComponent(id)}`, request.url).toString();
     const threadId = record.row.email_thread_id || orderMessageId(id);
     const closedMessage = finalStatus === 'Entrega completa'
-      ? `<p>Se completó la entrega total de la orden. La orden queda lista para cerrar.</p>`
-      : `<p>La orden continúa abierta para registrar las entregas pendientes.</p>`;
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: recipients,
-        subject: `Re: Orden de compra ${record.row.number} — ${finalStatus === 'Entrega completa' ? 'Entrega completa' : `Entrega ${delivery.delivery_number} confirmada`}`,
-        headers: replyEmailHeaders(threadId),
-        html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>${finalStatus === 'Entrega completa' ? 'Entrega completa' : 'Entrega parcial confirmada'}</h2><p>Se ha entregado la entrega parcial <strong>${delivery.delivery_number}</strong> de la orden <strong>${record.row.number}</strong>.</p><p>Cantidad recibida: <strong>${delivery.quantity}</strong> equipos.</p><p>Confirmó la recepción: <strong>${signatureName}</strong> (DNI: ${signatureDni}).</p>${closedMessage}<p><a href="${internalUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Abrir orden</a></p></div>`,
-      }),
+      ? `<p>A entrega total do pedido foi concluída. O pedido está pronto para ser encerrado.</p>`
+      : `<p>O pedido permanece aberto para o registro das entregas pendentes.</p>`;
+    const result = await sendEmail({
+      to: recipients,
+      subject: `Re: Pedido de compra ${record.row.number} — ${finalStatus === 'Entrega completa' ? 'Entrega completa' : `Entrega ${delivery.delivery_number} confirmada`}`,
+      headers: replyEmailHeaders(threadId),
+      fallbackMessageId: threadId,
+      html: `<div style="font-family:Arial,sans-serif;color:#1e2d43;line-height:1.6;max-width:620px"><h2>${finalStatus === 'Entrega completa' ? 'Entrega completa' : 'Entrega parcial confirmada'}</h2><p>A entrega parcial <strong>${delivery.delivery_number}</strong> do pedido <strong>${record.row.number}</strong> foi recebida.</p><p>Quantidade recebida: <strong>${delivery.quantity}</strong> equipamentos.</p><p>Recebimento confirmado por: <strong>${signatureName}</strong> (CPF: ${signatureDni}).</p>${closedMessage}<p><a href="${internalUrl}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#6f61dd;color:white;text-decoration:none">Abrir pedido</a></p></div>`,
     });
-    if (!response.ok) notificationError = `La recepción quedó registrada, pero no se pudo enviar el aviso: ${await response.text()}`;
+    if (!result.ok) notificationError = `La recepción quedó registrada, pero no se pudo enviar el aviso: ${result.error}`;
     else {
-      const storedMessageId = await resolveSentMessageId(apiKey, response, threadId);
+      const storedMessageId = result.messageId || threadId;
       await db.prepare('UPDATE purchase_orders SET email_thread_id = COALESCE(email_thread_id, ?1) WHERE id = ?2').bind(record.row.email_thread_id || storedMessageId, id).run();
     }
   }
