@@ -115,6 +115,26 @@ export async function ensureSchema(db: D1Database) {
       'UPDATE purchase_order_sequence SET next_number = 1 WHERE id = 1',
     ).run();
   }
+  const independentTestSequenceMigration = await db.prepare(`
+    INSERT OR IGNORE INTO app_settings (key, value)
+    VALUES ('normal_sequence_ignores_tests_v1', '1')
+  `).run();
+  if (independentTestSequenceMigration.meta.changes === 1) {
+    await db.prepare(`
+      UPDATE purchase_order_sequence
+      SET next_number = (
+        SELECT COALESCE(MAX(
+          CASE
+            WHEN number LIKE 'OC-%' THEN CAST(SUBSTR(number, 4) AS INTEGER)
+            ELSE CAST(number AS INTEGER)
+          END
+        ), 0) + 1
+        FROM purchase_orders
+        WHERE is_test = 0
+      )
+      WHERE id = 1
+    `).run();
+  }
   await purgeExpiredArchivedOrders(db);
   await db.prepare("UPDATE deliveries SET received_quantity = quantity WHERE status = 'Entregado' AND received_quantity = 0").run();
 }

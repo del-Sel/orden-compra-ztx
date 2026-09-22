@@ -19,13 +19,16 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
   const now = new Date().toISOString();
   const stage = (existing.row.status || 'draft') as OrderStage;
+  const nextNumber = existing.row.is_test
+    ? String(body.number ?? existing.row.number).trim() || existing.row.number
+    : existing.row.number;
   const deliveredQuantity = existing.deliveries.reduce((sum, delivery) => sum + (delivery.received_quantity || (delivery.status === 'Entregado' ? delivery.quantity : 0)), 0);
   const finalStatus = calculateFinalStatus(stage, Math.max(Number(body.totalQuantity) || 0, 0), deliveredQuantity);
   const result = await db.prepare(`UPDATE purchase_orders SET
     issue_date = ?1, requested_by = ?2, payment = ?3, due_date = ?4, buyer = ?5,
     product = ?6, description = ?7, unit_price = ?8, total_quantity = ?9, product_notes = ?10,
-    general_notes = ?11, general_data_notes = ?12, client_name = ?13, client_email = ?14, final_status = ?15, updated_at = ?16
-    WHERE id = ?17`).bind(
+    general_notes = ?11, general_data_notes = ?12, client_name = ?13, client_email = ?14, number = ?15, final_status = ?16, updated_at = ?17
+    WHERE id = ?18`).bind(
     String(body.issueDate ?? ''),
     String(body.requestedBy ?? ''),
     String(body.payment ?? ''),
@@ -40,6 +43,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     String(body.generalDataNotes ?? ''),
     String(body.clientName ?? ''),
     parseEmailList(String(body.clientEmail ?? '')).join(', '),
+    nextNumber,
     finalStatus,
     now,
     id,

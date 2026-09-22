@@ -35,7 +35,10 @@ export async function POST(request: Request) {
   const shareToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '');
   const db = getDb();
   await ensureSchema(db);
-  const orderNumber = await allocateOrderNumber(db);
+  const requestedNumber = String(body.number ?? '').trim();
+  const orderNumber = isTest
+    ? requestedNumber || 'PRUEBA'
+    : await allocateOrderNumber(db);
 
   await db.prepare(`INSERT INTO purchase_orders (
     id, share_token, number, issue_date, requested_by, payment, due_date, buyer,

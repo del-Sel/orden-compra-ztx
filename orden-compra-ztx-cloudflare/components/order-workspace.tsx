@@ -1416,9 +1416,16 @@ export default function OrderWorkspace({
                     {canEdit ? (
                       <input
                         value={order.number}
-                        readOnly
-                        placeholder="Se asignará al guardar la orden"
-                        aria-readonly="true"
+                        onChange={(event) =>
+                          showTests && updateOrder("number", event.target.value)
+                        }
+                        readOnly={!showTests}
+                        placeholder={
+                          showTests
+                            ? "Número de prueba"
+                            : "Se asignará al guardar la orden"
+                        }
+                        aria-readonly={!showTests}
                       />
                     ) : (
                       <strong>{order.number || "—"}</strong>
