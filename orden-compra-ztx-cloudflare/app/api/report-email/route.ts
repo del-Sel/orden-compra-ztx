@@ -9,14 +9,15 @@ type Body = {
   html?: unknown;
 };
 
-function getMailToken() {
-  return (env as unknown as { REPORT_MAIL_TOKEN?: string }).REPORT_MAIL_TOKEN || '';
+function getMailTokens() {
+  const bindings = env as unknown as { REPORT_MAIL_TOKEN?: string; PORTAL_REPORT_MAIL_TOKEN?: string };
+  return [bindings.REPORT_MAIL_TOKEN, bindings.PORTAL_REPORT_MAIL_TOKEN].filter((token): token is string => Boolean(token));
 }
 
 export async function POST(request: Request) {
-  const expectedToken = getMailToken();
+  const expectedTokens = getMailTokens();
   const providedToken = request.headers.get('X-Report-Mail-Token') || '';
-  if (!expectedToken || providedToken !== expectedToken) {
+  if (!expectedTokens.length || !expectedTokens.includes(providedToken)) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
